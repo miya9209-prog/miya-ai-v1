@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from openai import OpenAI
 
 # -----------------------------
-# Page config (채팅창 느낌)
+# Page config
 # -----------------------------
 st.set_page_config(page_title="미야언니", layout="centered", initial_sidebar_state="collapsed")
 
@@ -18,7 +18,6 @@ OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""
 if not OPENAI_API_KEY:
     st.error("OPENAI_API_KEY가 필요합니다. Streamlit Secrets에 OPENAI_API_KEY를 추가해주세요.")
     st.stop()
-
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # -----------------------------
@@ -53,7 +52,6 @@ def extract_product_no(url: str) -> str | None:
     return m.group(1) if m else None
 
 def fetch_page_text(url: str) -> str:
-    """상품/페이지 텍스트를 최대한 단순하게 추출 (v1.1)"""
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         r = requests.get(url, headers=headers, timeout=10)
@@ -79,9 +77,9 @@ SYSTEM_PROMPT = """
 4) 정책 답변은 POLICY_DB 기준으로 정확히. 없으면 확인 필요/확인 경로 안내.
 5) 지금은 봄 전환기(3월). 추천 시 너무 한겨울/한여름 아이템은 피하고,
    고객이 세일/전시즌 의사가 있으면 그 점을 알려 선택을 돕는다.
-6) 고객이 '배송 언제까지/언제 도착'처럼 주문단위 질문을 하면:
-   현재는 주문DB 연동 전이므로 정책/평균 + 당일출고 기준으로 안내하고,
-   마지막에 '주문번호/주문시간/마이페이지 주문조회' 안내로 마무리한다.
+6) '언제 도착'처럼 주문단위 질문은 주문DB 연동 전이므로
+   정책/평균 + 2시 이전 당일출고 기준으로 안내하고,
+   마지막에 '주문시간/마이페이지 주문조회' 안내로 마무리한다.
 """
 
 def ensure_state():
@@ -93,14 +91,17 @@ def ensure_state():
         st.session_state.profile_saved = False
     if "need_profile" not in st.session_state:
         st.session_state.need_profile = False
-    if "prefill" not in st.session_state:
-        st.session_state.prefill = ""
     if "page_text" not in st.session_state:
         st.session_state.page_text = ""
     if "page_url" not in st.session_state:
         st.session_state.page_url = ""
-
 ensure_state()
+
+def reset_all():
+    st.session_state.chat = []
+    st.session_state.profile = None
+    st.session_state.profile_saved = False
+    st.session_state.need_profile = False
 
 def profile_form_inline():
     st.markdown("**더 정확한 추천을 위해 체형 정보를 알려주실까요? (30초)**")
@@ -159,12 +160,16 @@ def call_llm(user_text: str, url: str, product_no: str | None, page_text: str):
     )
     return resp.choices[0].message.content
 
+def send_and_respond(text: str, current_url: str, product_no: str | None, page_text: str):
+    st.session_state.chat.append({"role": "user", "content": text})
+    ans = call_llm(text, current_url, product_no, page_text)
+    st.session_state.chat.append({"role": "assistant", "content": ans})
+
 # -----------------------------
 # URL / context
 # -----------------------------
 q = st.query_params
 current_url = q.get("url", "")
-
 product_no = extract_product_no(current_url)
 is_product_page = bool(product_no)
 
@@ -172,57 +177,82 @@ is_product_page = bool(product_no)
 if current_url and st.session_state.page_url != current_url:
     st.session_state.page_url = current_url
     st.session_state.page_text = fetch_page_text(current_url)
-
 page_text = st.session_state.page_text
+
+# -----------------------------
+# CSS: 상단 잘림/여백 문제 해결
+# -----------------------------
+st.markdown("""
+<style>
+/* 상단/하단 여백 확보: 제목 잘림 방지 */
+.block-container { padding-top: 2.4rem; padding-bottom: 1.4rem; }
+/* Streamlit 기본 헤더가 겹칠 때 대비 */
+header[data-testid="stHeader"] { height: 0px; }
+div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
+</style>
+""", unsafe_allow_html=True)
 
 # -----------------------------
 # Header (최소)
 # -----------------------------
-st.markdown("""
-<style>
-/* 상단 여백 줄이기 */
-.block-container { padding-top: 1.2rem; padding-bottom: 1.2rem; }
-h1, h2, h3 { margin-bottom: .4rem; }
-</style>
-""", unsafe_allow_html=True)
+top = st.columns([1, 0.25])
+with top[0]:
+    st.markdown("## 미샵 쇼핑친구 미야언니 🙂")
+    st.caption("쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.")
+with top[1]:
+    if st.button("초기화", use_container_width=True):
+        reset_all()
+        st.rerun()
 
-st.markdown("## 미샵 쇼핑친구 미야언니 🙂")
-st.caption("쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.")
-
-# 상품 페이지에서 열렸다면, 첫 메시지(가볍게)
+# 상품 페이지에서 열렸고 대화가 비어있으면, 첫 인사 자동
 if is_product_page and not st.session_state.chat:
     st.session_state.chat.append({
         "role": "assistant",
-        "content": "안녕하세요 🙂 미야언니예요.\n지금 보고 계신 상품 기준으로 같이 볼까요?\n\n원하시면 ‘사이즈/체형/코디’ 중에서 먼저 도와드릴게요."
+        "content": "안녕하세요 🙂 미야언니예요.\n지금 보고 계신 상품 기준으로 같이 볼까요?\n\n‘사이즈/코디/배송·교환’ 중 뭐부터 볼까요?"
     })
 
 # -----------------------------
-# Quick actions (채팅 위에 작게)
+# Quick actions: 버튼 누르면 "즉시 대화 시작" (핵심 개선)
 # -----------------------------
-with st.container():
-    cols = st.columns(3)
-    if is_product_page:
-        if cols[0].button("사이즈", use_container_width=True):
-            st.session_state.need_profile = True
-            st.session_state.prefill = "이 상품 사이즈가 저에게 맞을까요? 추천/비추천 결론 먼저 말해주고, 근거 2~3개와 주의점도 알려줘."
-        if cols[1].button("코디", use_container_width=True):
-            st.session_state.need_profile = True
-            st.session_state.prefill = "이 상품으로 코디 2~3세트 추천해줘. 출근/모임/데일리 중 잘 맞는 조합으로."
-        if cols[2].button("배송/교환", use_container_width=True):
-            st.session_state.prefill = "이 상품 배송/교환/반품 관련해서 핵심만 정리해줘."
-    else:
-        if cols[0].button("쇼핑추천", use_container_width=True):
-            st.session_state.need_profile = True
-            st.session_state.prefill = "봄 전환기 기준으로 지금 입기 좋은 상품 추천해줘. 출근/모임/데일리 중부터 물어봐줘."
-        if cols[1].button("정책/배송", use_container_width=True):
-            st.session_state.prefill = "배송/교환/반품/쿠폰/적립금 정책 질문을 도와줘."
-        if cols[2].button("체형/사이즈", use_container_width=True):
-            st.session_state.need_profile = True
-            st.session_state.prefill = "체형/사이즈 상담을 시작해줘. 먼저 어떤 고민인지 물어봐줘."
+cols = st.columns(3)
 
-# B 방식: 필요할 때만 체형 입력
+if is_product_page:
+    if cols[0].button("사이즈", use_container_width=True):
+        st.session_state.need_profile = True
+        if st.session_state.profile is not None:
+            send_and_respond("이 상품 사이즈가 저에게 맞을까요? 추천/비추천 결론 먼저 말해주고 근거 2~3개와 주의점도 알려줘.", current_url, product_no, page_text)
+        st.rerun()
+
+    if cols[1].button("코디", use_container_width=True):
+        st.session_state.need_profile = True
+        if st.session_state.profile is not None:
+            send_and_respond("이 상품으로 코디 2~3세트 추천해줘. 출근/모임/데일리 중 잘 맞는 조합으로.", current_url, product_no, page_text)
+        st.rerun()
+
+    if cols[2].button("배송/교환", use_container_width=True):
+        send_and_respond("이 상품 배송/교환/반품 관련해서 핵심만 정리해줘.", current_url, product_no, page_text)
+        st.rerun()
+
+else:
+    if cols[0].button("쇼핑추천", use_container_width=True):
+        st.session_state.need_profile = True
+        if st.session_state.profile is not None:
+            send_and_respond("봄 전환기 기준으로 지금 입기 좋은 추천을 시작해줘. 먼저 출근/모임/데일리 중 무엇인지 질문해줘.", current_url, product_no, page_text)
+        st.rerun()
+
+    if cols[1].button("정책/배송", use_container_width=True):
+        send_and_respond("배송/교환/반품/쿠폰/적립금 정책 문의를 빠르게 안내해줘.", current_url, product_no, page_text)
+        st.rerun()
+
+    if cols[2].button("체형/사이즈", use_container_width=True):
+        st.session_state.need_profile = True
+        if st.session_state.profile is not None:
+            send_and_respond("체형/사이즈 상담 시작해줘. 먼저 어떤 고민인지 질문해줘.", current_url, product_no, page_text)
+        st.rerun()
+
+# B 방식: 필요할 때만 체형 입력 폼 노출
 if st.session_state.need_profile and st.session_state.profile is None:
-    st.info("정확도를 높이려면 체형 입력이 좋아요 🙂 (원치 않으면 그냥 상담도 가능해요)")
+    st.info("정확도를 높이려면 체형 입력이 좋아요 🙂 (원치 않으면 ‘초기화’ 후 그냥 질문해도 돼요)")
     profile_form_inline()
 
 if st.session_state.profile and st.session_state.profile_saved:
@@ -239,25 +269,14 @@ for m in st.session_state.chat:
     else:
         st.chat_message("assistant").write(m["content"])
 
-# prefill 전송 버튼(선택)
-if st.session_state.prefill:
-    if st.button("이 내용으로 바로 시작", use_container_width=True):
-        st.session_state.chat.append({"role": "user", "content": st.session_state.prefill})
-        st.session_state.prefill = ""
-        with st.chat_message("assistant"):
-            with st.spinner("미야언니가 같이 보고 있어요 🙂"):
-                ans = call_llm(st.session_state.chat[-1]["content"], current_url, product_no, page_text)
-                st.write(ans)
-        st.session_state.chat.append({"role": "assistant", "content": ans})
-        st.rerun()
-
-# user input
+# -----------------------------
+# Chat input
+# -----------------------------
 user_input = st.chat_input("예) 이 상품 66 가능할까요? / 배송 언제 출고돼요? / 출근룩 추천")
 
 if user_input:
-    st.session_state.chat.append({"role": "user", "content": user_input})
     with st.chat_message("assistant"):
         with st.spinner("미야언니가 같이 보고 있어요 🙂"):
-            ans = call_llm(user_input, current_url, product_no, page_text)
-            st.write(ans)
-    st.session_state.chat.append({"role": "assistant", "content": ans})
+            send_and_respond(user_input, current_url, product_no, page_text)
+            st.write(st.session_state.chat[-1]["content"])
+    st.rerun()

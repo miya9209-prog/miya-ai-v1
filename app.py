@@ -40,7 +40,7 @@ SYSTEM_PROMPT = """
 1) 공감 1줄 → 결론 먼저(추천/비추천) → 근거 2~3개 → 다음 행동(추가 질문/체크 포인트).
 2) 과장 금지(무조건/완벽 금지). 불확실하면 '가능성/주의'로 말한다.
 3) 상품페이지면 '지금 보고 있는 상품' 기준으로 답한다.
-4) 정책 답변은 POLICY_DB 기준으로 정확히. 없으면 확인 필요/확인 경로 안내.
+4) 정책 답변은 POLICY_DB 기준으로 정확히. (당일출고 기준은 반드시 '오후 2시'로만 말한다.)
 5) 지금은 봄 전환기(3월). 추천 시 너무 한겨울/한여름 아이템은 피하고,
    고객이 세일/전시즌 의사가 있으면 그 점을 알려 선택을 돕는다.
 6) '언제 도착'처럼 주문단위 질문은 주문DB 연동 전이므로
@@ -82,8 +82,7 @@ def reset_all():
     st.session_state.profile = None
     st.session_state.profile_saved = False
 
-def debounce(action_key: str, min_sec: float = 0.9) -> bool:
-    """짧은 시간 내 중복 실행 방지 (더블클릭/리런 방지)"""
+def debounce(action_key: str, min_sec: float = 0.8) -> bool:
     now = time.time()
     if st.session_state.last_action_key == action_key and (now - st.session_state.last_action_at) < min_sec:
         return False
@@ -121,7 +120,7 @@ def send_and_respond(text: str, url: str, product_no: str | None, page_text: str
     st.session_state.chat.append({"role":"assistant","content":ans})
 
 def profile_form():
-    st.markdown("### 체형 정보 (30초)")
+    st.markdown("### 정확한 추천 받기 (체형 입력 30초)")
     c1, c2 = st.columns(2)
     with c1:
         height = st.selectbox("키", ["선택","150 이하","150~155","156~160","161~165","166~170","170 이상"], key="p_height")
@@ -135,7 +134,6 @@ def profile_form():
         ok = st.button("입력 완료", use_container_width=True, key="p_submit")
     with colB:
         save = st.checkbox("다음에도 재사용(저장)", value=False, key="p_save")
-
     if ok:
         st.session_state.profile = {
             "height": None if height=="선택" else height,
@@ -162,13 +160,54 @@ if current_url and st.session_state.page_url != current_url:
 page_text = st.session_state.page_text
 
 # -----------------------------
-# CSS: 상단 여백/헤더 충돌 제거
+# CSS: "대화창"을 박스로 만들고 입력영역을 명확히
 # -----------------------------
 st.markdown("""
 <style>
-.block-container { padding-top: 2.2rem; padding-bottom: 1.2rem; }
+.block-container { padding-top: 2.1rem; padding-bottom: 6.2rem; } /* 아래 여백 크게(입력영역 자리) */
 header[data-testid="stHeader"] { height: 0px; }
 div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
+
+/* 대화 영역 박스 */
+.chat-shell{
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 16px;
+  padding: 14px 14px 6px 14px;
+  background: rgba(255,255,255,.02);
+}
+
+/* 말풍선 느낌 강화(기본 chat_message 위에 약간 보정) */
+div[data-testid="stChatMessage"]{
+  margin-top: .3rem;
+  margin-bottom: .3rem;
+}
+
+/* 하단 입력영역 안내바(시각적 sticky 느낌) */
+.input-bar-hint{
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 14px;
+  width: min(720px, calc(100% - 24px));
+  z-index: 9999;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(0,0,0,.55);
+  backdrop-filter: blur(10px);
+  font-size: 13px;
+  color: rgba(255,255,255,.85);
+}
+
+/* Streamlit chat input을 위 안내바와 겹치지 않게 */
+div[data-testid="stChatInput"]{
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 54px;
+  width: min(720px, calc(100% - 24px));
+  z-index: 10000;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -184,67 +223,76 @@ with top[1]:
         reset_all()
         st.rerun()
 
-# 첫 인사 (폼 없음! 채팅으로만)
 if not st.session_state.chat:
     if is_product_page:
         st.session_state.chat.append({"role":"assistant","content":"안녕하세요 🙂 미야언니예요.\n지금 보고 계신 상품 기준으로 같이 볼까요?\n\n사이즈/코디/배송·교환 중 뭐부터 볼까요?"})
     else:
         st.session_state.chat.append({"role":"assistant","content":"안녕하세요 🙂 미야언니예요.\n무엇을 도와드릴까요?\n\n예) 출근룩 추천 / 배송비 / 교환비 / 66인데 이 옷 괜찮을까요?"})
 
-# -----------------------------
-# Quick buttons (B 방식: 폼을 강제하지 않음)
-# -----------------------------
+# Quick buttons
 cols = st.columns(3)
 if is_product_page:
-    if cols[0].button("사이즈", use_container_width=True, key="b_size"):
+    if cols[0].button("사이즈", use_container_width=True):
         if debounce("b_size"):
-            send_and_respond("이 상품 사이즈가 저에게 맞을까요? 결론 먼저(추천/주의) 말해주고, 근거 2~3개와 확인해야 할 포인트도 알려줘. 필요하면 체형 정보를 요청해줘.", current_url, product_no, page_text)
+            send_and_respond("이 상품 사이즈가 저에게 맞을까요? 결론 먼저(추천/주의) 말해주고, 근거 2~3개와 확인 포인트도 알려줘. 필요하면 체형 정보를 요청해줘.", current_url, product_no, page_text)
             st.rerun()
-    if cols[1].button("코디", use_container_width=True, key="b_codi"):
+    if cols[1].button("코디", use_container_width=True):
         if debounce("b_codi"):
             send_and_respond("이 상품으로 코디 2~3세트 추천해줘. 출근/모임/데일리 중 잘 맞는 조합으로. 필요하면 체형 정보를 요청해줘.", current_url, product_no, page_text)
             st.rerun()
-    if cols[2].button("배송/교환", use_container_width=True, key="b_policy"):
-        if debounce("b_policy"):
+    if cols[2].button("배송/교환", use_container_width=True):
+        if debounce("b_pol"):
             send_and_respond("이 상품 배송/교환/반품 핵심만 빠르게 정리해줘.", current_url, product_no, page_text)
             st.rerun()
 else:
-    if cols[0].button("쇼핑추천", use_container_width=True, key="b_shop"):
+    if cols[0].button("쇼핑추천", use_container_width=True):
         if debounce("b_shop"):
             send_and_respond("봄 전환기 기준으로 쇼핑 추천을 시작해줘. 먼저 출근/모임/데일리 중 무엇인지 질문해줘. 필요하면 체형 정보를 요청해줘.", current_url, product_no, page_text)
             st.rerun()
-    if cols[1].button("정책/배송", use_container_width=True, key="b_policy2"):
-        if debounce("b_policy2"):
+    if cols[1].button("정책/배송", use_container_width=True):
+        if debounce("b_pol2"):
             send_and_respond("배송/교환/반품/쿠폰/적립금 정책 문의를 빠르게 안내해줘. 마지막에 어떤 항목이 궁금한지 되물어봐줘.", current_url, product_no, page_text)
             st.rerun()
-    if cols[2].button("체형/사이즈", use_container_width=True, key="b_body"):
+    if cols[2].button("체형/사이즈", use_container_width=True):
         if debounce("b_body"):
             send_and_respond("체형/사이즈 상담을 시작해줘. 고객에게 키/사이즈/체형 고민을 30초 입력으로 유도해줘.", current_url, product_no, page_text)
             st.rerun()
 
-# -----------------------------
-# 체형 입력은 '선택' (B 방식)
-# -----------------------------
+# 체형 입력은 접어서
 with st.expander("정확한 추천 받기 (체형 입력 30초)", expanded=False):
     profile_form()
-    if st.session_state.profile_saved:
-        st.caption("저장해두면 다음부터 더 빠르게 추천해드려요 🙂")
 
 st.divider()
 
 # -----------------------------
-# Chat display
+# Chat shell + auto scroll anchor
 # -----------------------------
+st.markdown('<div class="chat-shell">', unsafe_allow_html=True)
+
 for m in st.session_state.chat:
     if m["role"] == "user":
         st.chat_message("user").write(m["content"])
     else:
         st.chat_message("assistant").write(m["content"])
 
+# anchor for auto-scroll
+st.markdown('<div id="chat-bottom"></div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Auto scroll script
+st.markdown("""
+<script>
+  const el = window.parent.document.getElementById("chat-bottom");
+  if (el) { el.scrollIntoView({behavior: "smooth"}); }
+</script>
+""", unsafe_allow_html=True)
+
 # -----------------------------
-# Chat input
+# Input (fixed)
 # -----------------------------
-user_input = st.chat_input("예) 이 상품 66 가능할까요? / 배송 언제 출고돼요? / 출근룩 추천")
+user_input = st.chat_input("메시지를 입력하세요… (예: 66인데 이 상품 괜찮을까요?)")
+st.markdown('<div class="input-bar-hint">⬇︎ 여기에서 바로 질문하시면, 대화가 아래에서 즉시 이어집니다 🙂</div>', unsafe_allow_html=True)
+
 if user_input:
     if debounce("chat_send"):
         send_and_respond(user_input, current_url, product_no, page_text)

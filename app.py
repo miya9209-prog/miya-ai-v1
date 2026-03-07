@@ -299,7 +299,7 @@ page_text = st.session_state.page_text
 st.markdown("""
 <style>
 .block-container {
-  padding-top: 1.8rem;
+  padding-top: 3.2rem;
   padding-bottom: 6rem;
   max-width: 760px;
 }

@@ -106,10 +106,6 @@ def ensure_state():
         st.session_state.profile = None
     if "profile_saved" not in st.session_state:
         st.session_state.profile_saved = False
-    if "page_url" not in st.session_state:
-        st.session_state.page_url = ""
-    if "product_context" not in st.session_state:
-        st.session_state.product_context = None
     if "last_action_at" not in st.session_state:
         st.session_state.last_action_at = 0.0
     if "last_action_key" not in st.session_state:
@@ -147,44 +143,92 @@ def clean_text(text: str) -> str:
         return ""
     return re.sub(r"\s+", " ", text).strip()
 
+def split_meta_title(title: str) -> str:
+    if not title:
+        return ""
+    for sep in ["|", "-", "–", "—"]:
+        parts = [x.strip() for x in title.split(sep) if x.strip()]
+        if parts and len(parts[0]) <= 35:
+            return parts[0]
+    return title.strip()
+
 def find_product_name(soup: BeautifulSoup) -> str:
     candidates = []
 
+    # 1순위: JSON-LD Product name
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            raw = script.string or script.get_text()
+            if not raw:
+                continue
+            data = json.loads(raw)
+            items = data if isinstance(data, list) else [data]
+            for item in items:
+                if isinstance(item, dict):
+                    item_type = item.get("@type", "")
+                    if item_type == "Product" and item.get("name"):
+                        name = clean_text(str(item["name"]))
+                        if 3 <= len(name) <= 40:
+                            candidates.append(name)
+        except Exception:
+            pass
+
+    # 2순위: 실제 상품명 영역 셀렉터
     selectors = [
-        ".product_title",
-        ".prdName",
-        ".name",
+        ".headingArea h2",
+        ".headingArea h3",
         ".infoArea h2",
         ".infoArea h3",
+        ".prdName",
+        ".name",
         "h2.name",
         "h3.name",
         "h1"
     ]
-
     for selector in selectors:
         try:
             for tag in soup.select(selector):
                 txt = clean_text(tag.get_text(" ", strip=True))
-                if 3 <= len(txt) <= 60:
+                if 3 <= len(txt) <= 40:
                     candidates.append(txt)
         except Exception:
             pass
 
+    # 3순위: 짧고 상품명 같은 텍스트
+    keywords = ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트", "점퍼", "맨투맨"]
     for tag in soup.find_all(["strong", "span", "div"]):
         txt = clean_text(tag.get_text(" ", strip=True))
-        if 3 <= len(txt) <= 60:
-            if any(word in txt for word in [
-                "자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠",
-                "원피스", "팬츠", "데님", "가디건", "코트", "점퍼"
-            ]):
-                candidates.append(txt)
+        if 4 <= len(txt) <= 35 and any(k in txt for k in keywords):
+            candidates.append(txt)
 
-    if soup.title and soup.title.string:
-        candidates.append(clean_text(soup.title.string))
-
+    # 4순위: og:title / title
     og = soup.find("meta", attrs={"property": "og:title"})
     if og and og.get("content"):
-        candidates.append(clean_text(og["content"]))
+        og_title = split_meta_title(clean_text(og["content"]))
+        if 3 <= len(og_title) <= 40:
+            candidates.append(og_title)
+
+    if soup.title and soup.title.string:
+        page_title = split_meta_title(clean_text(soup.title.string))
+        if 3 <= len(page_title) <= 40:
+            candidates.append(page_title)
+
+    # 점수화
+    blacklist = ["미샵", "MISHARP", "상품결제정보", "배송정보", "교환 및 반품정보", "전체상품", "로그인", "회원가입", "장바구니", "마이페이지"]
+
+    def score_name(name: str):
+        score = 0
+        if 5 <= len(name) <= 28:
+            score += 6
+        if any(k in name for k in keywords):
+            score += 6
+        if any(b == name for b in blacklist):
+            score -= 10
+        if len(name) > 32:
+            score -= 2
+        if "/" in name or "|" in name:
+            score -= 2
+        return score
 
     seen = set()
     uniq = []
@@ -193,43 +237,11 @@ def find_product_name(soup: BeautifulSoup) -> str:
             uniq.append(c)
             seen.add(c)
 
-    blacklist_words = [
-        "미샵", "MISHARP", "상품결제정보", "배송정보", "교환 및 반품정보",
-        "전체상품", "로그인", "회원가입", "장바구니", "마이페이지"
-    ]
-
-    def score_name(name: str):
-        score = 0
-        if 5 <= len(name) <= 30:
-            score += 5
-        if any(x in name for x in [
-            "자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠",
-            "원피스", "팬츠", "데님", "가디건", "코트", "점퍼"
-        ]):
-            score += 5
-        if "미샵" in name:
-            score -= 2
-        if len(name) > 40:
-            score -= 3
-        if "/" in name or "|" in name or " - " in name:
-            score -= 2
-        if any(b in name for b in blacklist_words):
-            score -= 2
-        return score
-
-    filtered = [x for x in uniq if x]
-    if not filtered:
+    if not uniq:
         return ""
 
-    filtered.sort(key=score_name, reverse=True)
-    best = filtered[0]
-
-    if len(best) > 40 and len(filtered) > 1:
-        for alt in filtered[1:]:
-            if 4 <= len(alt) <= 30:
-                return alt
-
-    return best
+    uniq.sort(key=score_name, reverse=True)
+    return uniq[0]
 
 def split_sections(text: str) -> dict:
     if not text:
@@ -266,12 +278,13 @@ def guess_category(name: str, text: str) -> str:
         "슬랙스": ["슬랙스", "팬츠", "바지"],
         "블라우스": ["블라우스"],
         "셔츠": ["셔츠"],
-        "티셔츠": ["티셔츠", "티 ", "탑"],
+        "티셔츠": ["티셔츠", "탑"],
         "니트": ["니트", "가디건"],
         "자켓": ["자켓", "재킷"],
         "원피스": ["원피스"],
         "데님": ["데님", "청바지"],
         "코트": ["코트"],
+        "맨투맨": ["맨투맨"],
     }
     for cat, keywords in mapping.items():
         if any(k in corpus for k in keywords):
@@ -305,7 +318,7 @@ def fetch_product_context(url: str) -> dict:
         "raw_excerpt": raw_text[:4000]
     }
 
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False)
 def fetch_product_context_cached(url: str) -> dict:
     try:
         return fetch_product_context(url)
@@ -365,19 +378,6 @@ def get_fast_policy_answer(user_text: str) -> str | None:
 
     if any(k in q for k in ["합배송"]):
         return f"{POLICY_DB['shipping']['combined_shipping']} 🙂"
-
-    if any(k in q for k in ["적립금"]):
-        return (
-            f"{POLICY_DB['point']['use_min']} {POLICY_DB['point']['expiry']}\n"
-            f"기본적으로 {POLICY_DB['point']['purchase']}되고,\n"
-            f"후기는 일반 {POLICY_DB['point']['text_review']}, 포토 {POLICY_DB['point']['photo_review']}이에요 🙂"
-        )
-
-    if any(k in q for k in ["무통장", "입금", "카드", "부분취소"]):
-        return (
-            f"무통장 입금은 {POLICY_DB['payment']['bank_transfer']}\n"
-            f"카드 결제는 {POLICY_DB['payment']['card']}"
-        )
 
     return None
 
@@ -470,11 +470,8 @@ current_url = query.get("url", "")
 product_no = extract_product_no(current_url)
 is_product_page = bool(product_no)
 
-if current_url and st.session_state.page_url != current_url:
-    st.session_state.page_url = current_url
-    st.session_state.product_context = fetch_product_context_cached(current_url)
-
-product_context = st.session_state.product_context
+# 현재 URL 기준으로 항상 최신 상품 컨텍스트 반영
+product_context = fetch_product_context_cached(current_url) if current_url else None
 
 # -----------------------------
 # CSS
@@ -482,7 +479,7 @@ product_context = st.session_state.product_context
 st.markdown("""
 <style>
 .block-container {
-  padding-top: 2.4rem;
+  padding-top: calc(4.2rem + env(safe-area-inset-top));
   padding-bottom: 5.2rem;
   max-width: 760px;
 }
@@ -501,13 +498,42 @@ div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
   color: rgba(255,255,255,0.72);
   font-size: 14px;
 }
+
 @media (max-width: 768px) {
+  .block-container {
+    padding-top: calc(5.4rem + env(safe-area-inset-top));
+    padding-bottom: 5rem;
+  }
   .main-title {
-    font-size: 27px;
+    font-size: 26px;
     white-space: nowrap;
   }
   .main-subtitle {
     font-size: 13px;
+  }
+}
+
+/* 상단 4버튼 한 줄 고정 */
+.quick-buttons div[data-testid="stHorizontalBlock"] {
+  flex-wrap: nowrap !important;
+  gap: 0.35rem !important;
+}
+.quick-buttons div[data-testid="column"] {
+  min-width: 0 !important;
+  flex: 1 1 0 !important;
+}
+.quick-buttons button {
+  white-space: nowrap !important;
+  font-size: 13px !important;
+  padding-left: 0.3rem !important;
+  padding-right: 0.3rem !important;
+}
+@media (max-width: 768px) {
+  .quick-buttons button {
+    font-size: 11px !important;
+    min-height: 40px !important;
+    padding-left: 0.15rem !important;
+    padding-right: 0.15rem !important;
   }
 }
 
@@ -550,11 +576,6 @@ div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
   border-bottom-left-radius: 6px;
 }
 
-.quick-btn-row {
-  margin-top: 16px;
-  margin-bottom: 4px;
-}
-
 div[data-testid="stChatInput"] {
   position: fixed;
   left: 50%;
@@ -569,12 +590,8 @@ div[data-testid="stChatInput"] {
 # -----------------------------
 # 상단 헤더
 # -----------------------------
-header_cols = st.columns([0.76, 0.24])
-with header_cols[0]:
-    st.markdown('<div class="main-title">미샵 쇼핑친구 미야언니</div>', unsafe_allow_html=True)
-    st.markdown('<div class="main-subtitle">쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.</div>', unsafe_allow_html=True)
-with header_cols[1]:
-    st.write("")
+st.markdown(f'<div class="main-title">미샵 쇼핑친구 미야언니</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-subtitle">쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.</div>', unsafe_allow_html=True)
 
 # -----------------------------
 # 초기 메시지
@@ -593,9 +610,9 @@ if not st.session_state.messages:
         })
 
 # -----------------------------
-# 상단 버튼 4개 한 줄 배치
+# 상단 버튼 4개 한 줄
 # -----------------------------
-st.markdown('<div class="quick-btn-row"></div>', unsafe_allow_html=True)
+st.markdown('<div class="quick-buttons">', unsafe_allow_html=True)
 btn_cols = st.columns(4)
 
 if btn_cols[0].button("초기화", use_container_width=True, key="top_reset_btn"):
@@ -625,6 +642,8 @@ if btn_cols[3].button("배송/교환", use_container_width=True):
             current_url, product_no, product_context
         )
         st.rerun()
+
+st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.show_profile_form:
     with st.expander("정확한 추천 받기 (체형 입력 30초)", expanded=True):

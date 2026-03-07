@@ -89,8 +89,9 @@ SYSTEM_PROMPT = """
 - 당일출고 기준은 반드시 '오후 2시 이전 주문'으로만 답한다.
 - 정책 답변은 POLICY_DB 기준으로 답한다.
 - 상품 상담에서는 제공된 상품 구조 데이터(product_context)를 최우선으로 참고한다.
-- 상품명 모를 때는 [상품명] 같은 표현 쓰지 말고, '지금 보시는 상품'이라고 표현한다.
-- 상품페이지에서 실제 읽힌 근거 없이 '출근룩으로 좋다', '체형 커버된다' 같은 일반론을 남발하지 말 것.
+- 상품명 못 찾으면 '지금 보시는 상품'이라고 표현한다.
+- SEO용 긴 제목을 상품명처럼 그대로 반복하지 말 것.
+- 상품페이지에서 실제 읽힌 근거 없이 일반론을 남발하지 말 것.
 - 상품 구조 데이터에 없는 내용은 확정적으로 말하지 말 것.
 - 답변은 너무 길지 않게, 4~8문장 정도로 읽기 쉽게 정리할 것.
 """
@@ -144,33 +145,46 @@ def extract_product_no(url: str) -> str | None:
 def clean_text(text: str) -> str:
     if not text:
         return ""
-    text = re.sub(r"\s+", " ", text).strip()
-    return text
+    return re.sub(r"\s+", " ", text).strip()
 
 def find_product_name(soup: BeautifulSoup) -> str:
     candidates = []
 
-    # title
-    if soup.title and soup.title.string:
-        candidates.append(clean_text(soup.title.string))
+    # 1순위: 실제 상품명 영역으로 보이는 짧은 텍스트 우선
+    selectors = [
+        ".product_title",
+        ".prdName",
+        ".name",
+        ".infoArea h2",
+        ".infoArea h3",
+        "h2.name",
+        "h3.name",
+        "h1"
+    ]
 
-    # og:title
-    og = soup.find("meta", attrs={"property": "og:title"})
-    if og and og.get("content"):
-        candidates.append(clean_text(og["content"]))
+    for selector in selectors:
+        try:
+            for tag in soup.select(selector):
+                txt = clean_text(tag.get_text(" ", strip=True))
+                if 3 <= len(txt) <= 60:
+                    candidates.append(txt)
+        except Exception:
+            pass
 
-    # h1/h2/h3
-    for tag in soup.find_all(["h1", "h2", "h3"]):
-        txt = clean_text(tag.get_text(" ", strip=True))
-        if txt and len(txt) <= 80:
-            candidates.append(txt)
-
-    # strong/span/div 중 상품명처럼 보이는 짧은 텍스트
+    # 2순위: strong/span/div 중 상품명처럼 보이는 짧은 텍스트
     for tag in soup.find_all(["strong", "span", "div"]):
         txt = clean_text(tag.get_text(" ", strip=True))
         if 3 <= len(txt) <= 60:
-            if any(word in txt for word in ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트"]):
+            if any(word in txt for word in ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트", "점퍼"]):
                 candidates.append(txt)
+
+    # 3순위: title, og:title
+    if soup.title and soup.title.string:
+        candidates.append(clean_text(soup.title.string))
+
+    og = soup.find("meta", attrs={"property": "og:title"})
+    if og and og.get("content"):
+        candidates.append(clean_text(og["content"]))
 
     # 중복 제거
     seen = set()
@@ -180,18 +194,41 @@ def find_product_name(soup: BeautifulSoup) -> str:
             uniq.append(c)
             seen.add(c)
 
-    # 너무 흔한 문자열 제거
-    blacklist = ["미샵", "MISHARP", "상품결제정보", "배송정보", "교환 및 반품정보", "상품명", "전체상품"]
-    filtered = []
-    for c in uniq:
-        if any(b == c or b in c and len(c) < 8 for b in blacklist):
-            continue
-        filtered.append(c)
+    blacklist_words = [
+        "미샵", "MISHARP", "상품결제정보", "배송정보", "교환 및 반품정보",
+        "전체상품", "로그인", "회원가입", "장바구니", "마이페이지"
+    ]
 
-    if filtered:
-        # 가장 상품명스러운 첫 번째 것 사용
-        return filtered[0]
-    return ""
+    def score_name(name: str):
+        score = 0
+        if 5 <= len(name) <= 30:
+            score += 5
+        if any(x in name for x in ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트", "점퍼"]):
+            score += 5
+        if "미샵" in name:
+            score -= 2
+        if len(name) > 40:
+            score -= 3
+        if "/" in name or "|" in name or " - " in name:
+            score -= 2
+        if any(b in name for b in blacklist_words):
+            score -= 2
+        return score
+
+    filtered = [x for x in uniq if x]
+    if not filtered:
+        return ""
+
+    filtered.sort(key=score_name, reverse=True)
+    best = filtered[0]
+
+    # 너무 긴 SEO 제목이면 앞부분만 자르기보다 배제
+    if len(best) > 40 and len(filtered) > 1:
+        for alt in filtered[1:]:
+            if 4 <= len(alt) <= 30:
+                return alt
+
+    return best
 
 def split_sections(text: str) -> dict:
     if not text:
@@ -220,7 +257,7 @@ def split_sections(text: str) -> dict:
         "summary": joined[:2500],
         "material": extract_by_keywords(["소재", "원단", "혼용", "%", "면", "폴리", "레이온", "아크릴", "울", "스판", "비스코스", "나일론"]),
         "fit": extract_by_keywords(["핏", "여유", "라인", "체형", "복부", "팔뚝", "허벅지", "힙", "루즈", "와이드", "슬림", "정핏", "세미", "커버"]),
-        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "55", "66", "77", "S", "M", "L", "XL"]),
+        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "55", "66", "77", "S", "M", "L", "XL", "허리", "총장", "힙", "허벅지"]),
         "shipping": extract_by_keywords(["배송", "출고", "교환", "반품", "배송비"])
     }
 
@@ -230,7 +267,7 @@ def guess_category(name: str, text: str) -> str:
         "슬랙스": ["슬랙스", "팬츠", "바지"],
         "블라우스": ["블라우스"],
         "셔츠": ["셔츠"],
-        "티셔츠": ["티셔츠", "티", "탑"],
+        "티셔츠": ["티셔츠", "티 ", "탑"],
         "니트": ["니트", "가디건"],
         "자켓": ["자켓", "재킷"],
         "원피스": ["원피스"],
@@ -391,7 +428,7 @@ def process_user_message(user_text: str, current_url: str, product_no: str | Non
         return
 
     answer = get_llm_answer(user_text, current_url, product_no, product_context)
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+    st.session_state.messages.append({"role": "assistant", "content": answer)
 
 # -----------------------------
 # 체형 입력 폼
@@ -446,12 +483,43 @@ product_context = st.session_state.product_context
 st.markdown("""
 <style>
 .block-container {
-  padding-top: 3.2rem;
-  padding-bottom: 6rem;
+  padding-top: 2.4rem;
+  padding-bottom: 5.2rem;
   max-width: 760px;
 }
 header[data-testid="stHeader"] { height: 0px; }
 div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
+
+.title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.main-title {
+  font-size: 44px;
+  font-weight: 800;
+  line-height: 1.15;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.main-subtitle {
+  margin-top: 8px;
+  color: rgba(255,255,255,0.72);
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  .main-title {
+    font-size: 27px;
+    white-space: nowrap;
+  }
+  .main-subtitle {
+    font-size: 13px;
+  }
+}
 
 .msg-row {
   display: flex;
@@ -492,27 +560,16 @@ div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
   border-bottom-left-radius: 6px;
 }
 
-.input-hint {
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 10px;
-  width: min(720px, calc(100% - 24px));
-  background: rgba(0,0,0,.65);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 14px;
-  padding: 9px 12px;
-  color: rgba(255,255,255,.82);
-  font-size: 13px;
-  z-index: 9998;
-  backdrop-filter: blur(10px);
+.quick-btn-row {
+  margin-top: 16px;
+  margin-bottom: 4px;
 }
 
 div[data-testid="stChatInput"] {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 48px;
+  bottom: 16px;
   width: min(720px, calc(100% - 24px));
   z-index: 9999;
 }
@@ -520,13 +577,14 @@ div[data-testid="stChatInput"] {
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# 헤더
+# 상단 헤더
 # -----------------------------
-top = st.columns([1, 0.25])
-with top[0]:
-    st.markdown("## 미샵 쇼핑친구 미야언니 🙂")
-    st.caption("쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.")
-with top[1]:
+header_cols = st.columns([0.76, 0.24])
+with header_cols[0]:
+    st.markdown('<div class="main-title">미샵 쇼핑친구 미야언니</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-subtitle">쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.</div>', unsafe_allow_html=True)
+with header_cols[1]:
+    st.write("")
     if st.button("초기화", use_container_width=True):
         reset_all()
         st.rerun()
@@ -548,48 +606,37 @@ if not st.session_state.messages:
         })
 
 # -----------------------------
-# 빠른 버튼
+# 상단 버튼 4개 한 줄 배치
 # -----------------------------
-cols = st.columns(3)
-if is_product_page:
-    if cols[0].button("사이즈", use_container_width=True):
-        if debounce("size_btn"):
-            process_user_message(
-                "지금 보이는 상품 기준으로 사이즈 상담해줘. 결론 먼저 말하고, 근거를 상품 정보 기준으로 설명해줘. 정보가 부족하면 추가 질문해줘.",
-                current_url, product_no, product_context
-            )
-            st.rerun()
-    if cols[1].button("코디", use_container_width=True):
-        if debounce("codi_btn"):
-            process_user_message(
-                "지금 보이는 상품 기준으로 코디 추천해줘. 상품 정보에 근거해서만 말해주고, 부족하면 안전하게 표현해줘.",
-                current_url, product_no, product_context
-            )
-            st.rerun()
-    if cols[2].button("배송/교환", use_container_width=True):
-        if debounce("policy_btn"):
-            process_user_message(
-                "이 상품 배송이나 교환 반품 핵심만 알려줘.",
-                current_url, product_no, product_context
-            )
-            st.rerun()
-else:
-    if cols[0].button("쇼핑추천", use_container_width=True):
-        if debounce("shop_btn"):
-            process_user_message(
-                "봄 전환기 기준으로 쇼핑 추천을 시작해줘. 먼저 출근/모임/데일리 중 무엇인지 물어봐줘.",
-                current_url, product_no, product_context
-            )
-            st.rerun()
-    if cols[1].button("정책/배송", use_container_width=True):
-        if debounce("policy2_btn"):
-            process_user_message(
-                "배송/교환/반품/적립금 정책을 빠르게 알려줘.",
-                current_url, product_no, product_context
-            )
-            st.rerun()
-    if cols[2].button("체형/사이즈", use_container_width=True):
-        st.session_state.show_profile_form = True
+st.markdown('<div class="quick-btn-row"></div>', unsafe_allow_html=True)
+btn_cols = st.columns(4)
+
+if btn_cols[0].button("초기화", use_container_width=True, key="top_reset_btn"):
+    reset_all()
+    st.rerun()
+
+if btn_cols[1].button("사이즈", use_container_width=True):
+    if debounce("size_btn"):
+        process_user_message(
+            "지금 보이는 상품 기준으로 사이즈 상담해줘. 결론 먼저 말하고, 근거를 상품 정보 기준으로 설명해줘. 정보가 부족하면 추가 질문해줘.",
+            current_url, product_no, product_context
+        )
+        st.rerun()
+
+if btn_cols[2].button("코디", use_container_width=True):
+    if debounce("codi_btn"):
+        process_user_message(
+            "지금 보이는 상품 기준으로 코디 추천해줘. 상품 정보에 근거해서만 말해주고, 부족하면 안전하게 표현해줘.",
+            current_url, product_no, product_context
+        )
+        st.rerun()
+
+if btn_cols[3].button("배송/교환", use_container_width=True):
+    if debounce("policy_btn"):
+        process_user_message(
+            "이 상품 배송이나 교환 반품 핵심만 알려줘.",
+            current_url, product_no, product_context
+        )
         st.rerun()
 
 if st.session_state.show_profile_form:
@@ -640,10 +687,6 @@ if (el) { el.scrollIntoView({behavior: "smooth"}); }
 # 입력창
 # -----------------------------
 user_input = st.chat_input("메시지를 입력하세요…")
-st.markdown(
-    '<div class="input-hint">여기서 바로 질문하면, 고객님 말은 오른쪽 / 미야언니 답변은 왼쪽에 보여드릴게요 🙂</div>',
-    unsafe_allow_html=True
-)
 
 if user_input:
     if debounce("chat_send"):

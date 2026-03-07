@@ -3,6 +3,7 @@ import re
 import json
 import time
 import html
+import urllib.parse
 import requests
 import streamlit as st
 from bs4 import BeautifulSoup
@@ -59,6 +60,9 @@ POLICY_DB = {
     }
 }
 
+# -----------------------------
+# 시스템 프롬프트
+# -----------------------------
 SYSTEM_PROMPT = """
 너는 '미샵 쇼핑친구 미야언니'다.
 너의 역할은 4050 여성 고객이 쇼핑할 때 친구처럼 같이 봐주되, 전문가처럼 결론을 정리해주는 것이다.
@@ -85,7 +89,8 @@ SYSTEM_PROMPT = """
 중요 규칙:
 - 당일출고 기준은 반드시 '오후 2시 이전 주문'으로만 답한다.
 - 정책 답변은 POLICY_DB 기준으로 답한다.
-- 상품 상담에서는 제공된 상품 구조 데이터(product_context)를 최우선으로 참고한다.
+- 상품 상담에서는 제공된 product_context를 최우선으로 참고한다.
+- product_context.product_name이 있으면 그 이름만 사용한다.
 - 상품명 못 찾으면 '지금 보시는 상품'이라고 표현한다.
 - SEO용 긴 제목을 상품명처럼 그대로 반복하지 말 것.
 - 상품페이지에서 실제 읽힌 근거 없이 일반론을 남발하지 말 것.
@@ -101,42 +106,40 @@ def ensure_state():
         st.session_state.messages = []
     if "profile" not in st.session_state:
         st.session_state.profile = None
-    if "profile_saved" not in st.session_state:
-        st.session_state.profile_saved = False
-    if "last_action_at" not in st.session_state:
-        st.session_state.last_action_at = 0.0
-    if "last_action_key" not in st.session_state:
-        st.session_state.last_action_key = ""
+    if "last_context_key" not in st.session_state:
+        st.session_state.last_context_key = ""
+    if "last_action_nonce" not in st.session_state:
+        st.session_state.last_action_nonce = ""
     if "show_profile_form" not in st.session_state:
         st.session_state.show_profile_form = False
-    if "last_context_url" not in st.session_state:
-        st.session_state.last_context_url = ""
 
 ensure_state()
 
 def reset_all():
     st.session_state.messages = []
     st.session_state.profile = None
-    st.session_state.profile_saved = False
     st.session_state.show_profile_form = False
 
-def debounce(action_key: str, min_sec: float = 0.8) -> bool:
-    now = time.time()
-    if st.session_state.last_action_key == action_key and (now - st.session_state.last_action_at) < min_sec:
-        return False
-    st.session_state.last_action_key = action_key
-    st.session_state.last_action_at = now
-    return True
+# -----------------------------
+# URL / query
+# -----------------------------
+qp = st.query_params
+current_url = qp.get("url", "")
+product_no = qp.get("pn", "") or ""
+product_name_q = qp.get("pname", "") or ""
+action = qp.get("action", "") or ""
+nonce = qp.get("nonce", "") or ""
+
+context_key = f"{current_url}|{product_no}|{product_name_q}"
+
+# 페이지가 바뀌면 이전 대화 초기화
+if context_key != st.session_state.last_context_key:
+    st.session_state.last_context_key = context_key
+    st.session_state.messages = []
 
 # -----------------------------
-# URL / 상품 추출
+# 헬퍼
 # -----------------------------
-def extract_product_no(url: str) -> str | None:
-    if not url:
-        return None
-    m = re.search(r"product_no=(\d+)", url)
-    return m.group(1) if m else None
-
 def clean_text(text: str) -> str:
     if not text:
         return ""
@@ -154,7 +157,7 @@ def split_meta_title(title: str) -> str:
 def find_product_name(soup: BeautifulSoup) -> str:
     candidates = []
 
-    # 1순위: 카페24 표준 상품명 셀렉터
+    # 카페24 표준 상품명 우선
     priority_selectors = [
         "#span_product_name",
         "#span_product_name_mobile",
@@ -178,7 +181,7 @@ def find_product_name(soup: BeautifulSoup) -> str:
         except Exception:
             pass
 
-    # 2순위: JSON-LD Product name
+    # JSON-LD
     for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
         try:
             raw = script.string or script.get_text()
@@ -194,7 +197,7 @@ def find_product_name(soup: BeautifulSoup) -> str:
         except Exception:
             pass
 
-    # 3순위: og:title, title
+    # og:title / title
     og = soup.find("meta", attrs={"property": "og:title"})
     if og and og.get("content"):
         txt = split_meta_title(clean_text(og["content"]))
@@ -238,13 +241,7 @@ def find_product_name(soup: BeautifulSoup) -> str:
 
 def split_sections(text: str) -> dict:
     if not text:
-        return {
-            "summary": "",
-            "material": "",
-            "fit": "",
-            "size_tip": "",
-            "shipping": ""
-        }
+        return {"summary": "", "material": "", "fit": "", "size_tip": "", "shipping": ""}
 
     lines = [clean_text(x) for x in text.split("\n")]
     lines = [x for x in lines if x]
@@ -284,7 +281,10 @@ def guess_category(name: str, text: str) -> str:
             return cat
     return "기타"
 
-def fetch_product_context(url: str) -> dict:
+def fetch_product_context(url: str, passed_name: str = "") -> dict:
+    if not url:
+        return None
+
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(url, headers=headers, timeout=12)
     r.raise_for_status()
@@ -296,7 +296,9 @@ def fetch_product_context(url: str) -> dict:
     raw_text = soup.get_text("\n")
     raw_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
 
-    product_name = find_product_name(soup)
+    # 푸터에서 넘긴 상품명 우선
+    product_name = clean_text(passed_name) if passed_name else find_product_name(soup)
+
     sections = split_sections(raw_text)
     category = guess_category(product_name, raw_text)
 
@@ -312,12 +314,12 @@ def fetch_product_context(url: str) -> dict:
     }
 
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_product_context_cached(url: str) -> dict:
+def fetch_product_context_cached(url: str, passed_name: str = "") -> dict:
     try:
-        return fetch_product_context(url)
+        return fetch_product_context(url, passed_name)
     except Exception as e:
         return {
-            "product_name": "지금 보시는 상품",
+            "product_name": clean_text(passed_name) if passed_name else "지금 보시는 상품",
             "category": "기타",
             "summary": "",
             "material": "",
@@ -327,9 +329,6 @@ def fetch_product_context_cached(url: str) -> dict:
             "raw_excerpt": f"[상품 정보를 가져오지 못했습니다: {e}]"
         }
 
-# -----------------------------
-# 빠른 정책 응답
-# -----------------------------
 def get_fast_policy_answer(user_text: str) -> str | None:
     q = user_text.replace(" ", "").lower()
 
@@ -374,9 +373,6 @@ def get_fast_policy_answer(user_text: str) -> str | None:
 
     return None
 
-# -----------------------------
-# GPT 응답
-# -----------------------------
 def get_llm_answer(user_text: str, current_url: str, product_no: str | None, product_context: dict | None) -> str:
     context_pack = {
         "policy_db": POLICY_DB,
@@ -408,67 +404,19 @@ def get_llm_answer(user_text: str, current_url: str, product_no: str | None, pro
     )
     return resp.choices[0].message.content
 
-# -----------------------------
-# 메시지 처리
-# -----------------------------
 def process_user_message(user_text: str, current_url: str, product_no: str | None, product_context: dict | None):
     st.session_state.messages.append({"role": "user", "content": user_text})
-
     fast = get_fast_policy_answer(user_text)
     if fast:
         st.session_state.messages.append({"role": "assistant", "content": fast})
         return
-
     answer = get_llm_answer(user_text, current_url, product_no, product_context)
     st.session_state.messages.append({"role": "assistant", "content": answer})
 
 # -----------------------------
-# 체형 입력 폼
+# 현재 상품 컨텍스트
 # -----------------------------
-def profile_form():
-    st.markdown("### 정확한 추천 받기 (체형 입력 30초)")
-    c1, c2 = st.columns(2)
-    with c1:
-        height = st.selectbox("키", ["선택", "150 이하", "150~155", "156~160", "161~165", "166~170", "170 이상"])
-        size = st.selectbox("평소 사이즈", ["선택", "55", "66", "66반", "77", "77반", "88"])
-    with c2:
-        weight = st.selectbox("몸무게(선택)", ["선택", "45 이하", "46~50", "51~55", "56~60", "61~65", "66 이상"])
-        tpo = st.selectbox("스타일/TPO", ["선택", "출근룩", "모임룩", "데일리룩", "여행룩"])
-    concerns = st.multiselect("체형 고민(복수)", ["복부", "팔뚝", "힙", "허벅지", "상체통통", "하체통통", "전체통통"])
-
-    colA, colB = st.columns([1, 1])
-    with colA:
-        ok = st.button("입력 완료", use_container_width=True)
-    with colB:
-        save = st.checkbox("다음에도 재사용(저장)", value=False)
-
-    if ok:
-        st.session_state.profile = {
-            "height": None if height == "선택" else height,
-            "weight": None if weight == "선택" else weight,
-            "size": None if size == "선택" else size,
-            "tpo": None if tpo == "선택" else tpo,
-            "concerns": concerns
-        }
-        st.session_state.profile_saved = bool(save)
-        st.success("체형 정보를 저장했어요 🙂")
-        st.session_state.show_profile_form = False
-        st.rerun()
-
-# -----------------------------
-# 현재 페이지 로드
-# -----------------------------
-query = st.query_params
-current_url = query.get("url", "")
-product_no = extract_product_no(current_url)
-is_product_page = bool(product_no)
-
-# URL이 바뀌면 대화 초기화 (다른 상품으로 옮겨갔을 때 이전 상품명 방지)
-if current_url != st.session_state.last_context_url:
-    st.session_state.last_context_url = current_url
-    st.session_state.messages = []
-
-product_context = fetch_product_context_cached(current_url) if current_url else None
+product_context = fetch_product_context_cached(current_url, product_name_q) if current_url else None
 
 # -----------------------------
 # CSS
@@ -495,7 +443,6 @@ div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
   color: rgba(255,255,255,0.72);
   font-size: 14px;
 }
-
 @media (max-width: 768px) {
   .block-container {
     padding-top: calc(5.8rem + env(safe-area-inset-top));
@@ -510,28 +457,33 @@ div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
   }
 }
 
-/* 버튼 4개 한 줄 강제 */
-.quick-row-marker + div[data-testid="stHorizontalBlock"] {
-  flex-wrap: nowrap !important;
-  gap: 0.35rem !important;
+.quickbar {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  margin-top: 16px;
+  margin-bottom: 8px;
 }
-.quick-row-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
-  min-width: 0 !important;
-  flex: 1 1 0 !important;
-}
-.quick-row-marker + div[data-testid="stHorizontalBlock"] button {
-  white-space: nowrap !important;
-  width: 100% !important;
-  font-size: 13px !important;
-  padding-left: 0.2rem !important;
-  padding-right: 0.2rem !important;
+.quickbtn {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+  padding: 10px 6px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #ffffff;
+  background: rgba(255,255,255,0.02);
+  font-size: 13px;
+  font-weight: 600;
 }
 @media (max-width: 768px) {
-  .quick-row-marker + div[data-testid="stHorizontalBlock"] button {
-    font-size: 11px !important;
-    min-height: 40px !important;
-    padding-left: 0.1rem !important;
-    padding-right: 0.1rem !important;
+  .quickbar {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 4px;
+  }
+  .quickbtn {
+    font-size: 11px;
+    padding: 10px 2px;
   }
 }
 
@@ -586,17 +538,71 @@ div[data-testid="stChatInput"] {
 """, unsafe_allow_html=True)
 
 # -----------------------------
-# 상단 헤더
+# 헤더
 # -----------------------------
 st.markdown('<div class="main-title">미샵 쇼핑친구 미야언니</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-subtitle">쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.</div>', unsafe_allow_html=True)
 
 # -----------------------------
+# 빠른 버튼 HTML 한 줄
+# -----------------------------
+encoded_url = urllib.parse.quote(current_url, safe="")
+encoded_pn = urllib.parse.quote(product_no, safe="")
+encoded_pname = urllib.parse.quote(product_name_q, safe="")
+
+def quick_link(label, action_name):
+    return (
+        f'<a class="quickbtn" href="?url={encoded_url}&pn={encoded_pn}&pname={encoded_pname}'
+        f'&action={action_name}&nonce={int(time.time() * 1000)}">{label}</a>'
+    )
+
+quick_html = f"""
+<div class="quickbar">
+  {quick_link("초기화", "reset")}
+  {quick_link("사이즈", "size")}
+  {quick_link("코디", "codi")}
+  {quick_link("배송/교환", "policy")}
+</div>
+"""
+st.markdown(quick_html, unsafe_allow_html=True)
+
+# -----------------------------
+# action 처리
+# -----------------------------
+if action and nonce and st.session_state.last_action_nonce != nonce:
+    st.session_state.last_action_nonce = nonce
+
+    if action == "reset":
+        reset_all()
+        st.rerun()
+
+    if action == "size":
+        process_user_message(
+            "지금 보이는 상품 기준으로 사이즈 상담해줘. 결론 먼저 말하고, 근거를 상품 정보 기준으로 설명해줘. 정보가 부족하면 추가 질문해줘.",
+            current_url, product_no, product_context
+        )
+        st.rerun()
+
+    if action == "codi":
+        process_user_message(
+            "지금 보이는 상품 기준으로 코디 추천해줘. 상품 정보에 근거해서만 말해주고, 부족하면 안전하게 표현해줘.",
+            current_url, product_no, product_context
+        )
+        st.rerun()
+
+    if action == "policy":
+        process_user_message(
+            "이 상품 배송이나 교환 반품 핵심만 알려줘.",
+            current_url, product_no, product_context
+        )
+        st.rerun()
+
+# -----------------------------
 # 초기 메시지
 # -----------------------------
 if not st.session_state.messages:
-    if is_product_page:
-        name = product_context["product_name"] if product_context else "지금 보시는 상품"
+    if product_context:
+        name = product_context.get("product_name", "지금 보시는 상품")
         st.session_state.messages.append({
             "role": "assistant",
             "content": f"안녕하세요 🙂 미야언니예요.\n지금 보고 계신 '{name}' 기준으로 같이 볼까요?\n사이즈 / 코디 / 배송·교환 중 뭐부터 볼까요?"
@@ -606,44 +612,6 @@ if not st.session_state.messages:
             "role": "assistant",
             "content": "안녕하세요 🙂 미야언니예요.\n무엇을 도와드릴까요?\n예) 출근룩 추천 / 배송비 / 교환비 / 66인데 이 옷 괜찮을까요?"
         })
-
-# -----------------------------
-# 상단 버튼 4개 한 줄
-# -----------------------------
-st.markdown('<div class="quick-row-marker"></div>', unsafe_allow_html=True)
-btn_cols = st.columns(4)
-
-if btn_cols[0].button("초기화", use_container_width=True, key="top_reset_btn"):
-    reset_all()
-    st.rerun()
-
-if btn_cols[1].button("사이즈", use_container_width=True):
-    if debounce("size_btn"):
-        process_user_message(
-            "지금 보이는 상품 기준으로 사이즈 상담해줘. 결론 먼저 말하고, 근거를 상품 정보 기준으로 설명해줘. 정보가 부족하면 추가 질문해줘.",
-            current_url, product_no, product_context
-        )
-        st.rerun()
-
-if btn_cols[2].button("코디", use_container_width=True):
-    if debounce("codi_btn"):
-        process_user_message(
-            "지금 보이는 상품 기준으로 코디 추천해줘. 상품 정보에 근거해서만 말해주고, 부족하면 안전하게 표현해줘.",
-            current_url, product_no, product_context
-        )
-        st.rerun()
-
-if btn_cols[3].button("배송/교환", use_container_width=True):
-    if debounce("policy_btn"):
-        process_user_message(
-            "이 상품 배송이나 교환 반품 핵심만 알려줘.",
-            current_url, product_no, product_context
-        )
-        st.rerun()
-
-if st.session_state.show_profile_form:
-    with st.expander("정확한 추천 받기 (체형 입력 30초)", expanded=True):
-        profile_form()
 
 st.divider()
 
@@ -677,7 +645,6 @@ for msg in st.session_state.messages:
         )
 
 st.markdown('<div id="chat-bottom"></div>', unsafe_allow_html=True)
-
 st.markdown("""
 <script>
 const el = window.parent.document.getElementById("chat-bottom");
@@ -689,8 +656,6 @@ if (el) { el.scrollIntoView({behavior: "smooth"}); }
 # 입력창
 # -----------------------------
 user_input = st.chat_input("메시지를 입력하세요…")
-
 if user_input:
-    if debounce("chat_send"):
-        process_user_message(user_input, current_url, product_no, product_context)
-        st.rerun()
+    process_user_message(user_input, current_url, product_no, product_context)
+    st.rerun()

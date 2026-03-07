@@ -63,8 +63,6 @@ GENERIC_NAMES = {"미샵", "misharp", "MISHARP", "미샵여성", "Misharp"}
 def ensure_state():
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "profile" not in st.session_state:
-        st.session_state.profile = None
     if "last_context_key" not in st.session_state:
         st.session_state.last_context_key = ""
     if "last_action_nonce" not in st.session_state:
@@ -74,7 +72,6 @@ ensure_state()
 
 def reset_all():
     st.session_state.messages = []
-    st.session_state.profile = None
 
 qp = st.query_params
 current_url = qp.get("url", "") or ""
@@ -99,110 +96,9 @@ def is_generic_name(name: str) -> bool:
     name = clean_text(name)
     if name in GENERIC_NAMES:
         return True
-    lower = name.lower()
-    if lower in {x.lower() for x in GENERIC_NAMES}:
-        return True
     if len(name) <= 2:
         return True
     return False
-
-def split_meta_title(title: str) -> str:
-    if not title:
-        return ""
-    title = clean_text(title)
-    for sep in ["|", "-", "–", "—"]:
-        parts = [x.strip() for x in title.split(sep) if x.strip()]
-        if parts and 3 <= len(parts[0]) <= 50:
-            return parts[0]
-    return title
-
-def extract_product_name_from_soup(soup: BeautifulSoup) -> str:
-    candidates = []
-
-    priority_selectors = [
-        "#span_product_name",
-        "#span_product_name_mobile",
-        ".infoArea #span_product_name",
-        ".infoArea .headingArea h2",
-        ".infoArea .headingArea h3",
-        ".headingArea h2",
-        ".headingArea h3",
-        ".prdName",
-        ".name",
-        "h2.name",
-        "h3.name",
-        "h1"
-    ]
-
-    for selector in priority_selectors:
-        try:
-            for tag in soup.select(selector):
-                txt = clean_text(tag.get_text(" ", strip=True))
-                if 3 <= len(txt) <= 50:
-                    candidates.append(txt)
-        except Exception:
-            pass
-
-    # JSON-LD Product
-    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
-        try:
-            raw = script.string or script.get_text()
-            if not raw:
-                continue
-            data = json.loads(raw)
-            items = data if isinstance(data, list) else [data]
-            for item in items:
-                if isinstance(item, dict) and item.get("@type") == "Product" and item.get("name"):
-                    txt = clean_text(str(item["name"]))
-                    if 3 <= len(txt) <= 50:
-                        candidates.append(txt)
-        except Exception:
-            pass
-
-    og = soup.find("meta", attrs={"property": "og:title"})
-    if og and og.get("content"):
-        txt = split_meta_title(og.get("content", ""))
-        if 3 <= len(txt) <= 50:
-            candidates.append(txt)
-
-    if soup.title and soup.title.string:
-        txt = split_meta_title(soup.title.string)
-        if 3 <= len(txt) <= 50:
-            candidates.append(txt)
-
-    seen = set()
-    uniq = []
-    for c in candidates:
-        c = clean_text(c)
-        if c and c not in seen:
-            uniq.append(c)
-            seen.add(c)
-
-    keywords = ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트", "점퍼", "맨투맨"]
-    blacklist = ["상품결제정보", "배송정보", "교환 및 반품정보", "전체상품", "로그인", "회원가입", "장바구니", "마이페이지"]
-
-    def score_name(name: str):
-        score = 0
-        if 4 <= len(name) <= 30:
-            score += 6
-        if any(k in name for k in keywords):
-            score += 6
-        if any(b == name for b in blacklist):
-            score -= 20
-        if is_generic_name(name):
-            score -= 20
-        if len(name) > 38:
-            score -= 2
-        if "/" in name or "|" in name:
-            score -= 2
-        return score
-
-    if not uniq:
-        return ""
-
-    uniq.sort(key=score_name, reverse=True)
-    best = uniq[0]
-    return "" if is_generic_name(best) else best
 
 def split_sections(text: str) -> dict:
     if not text:
@@ -261,12 +157,7 @@ def fetch_product_context(url: str, passed_name: str = "") -> dict:
     raw_text = soup.get_text("\n")
     raw_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
 
-    passed_name = clean_text(passed_name)
-    if is_generic_name(passed_name):
-        passed_name = ""
-
-    html_name = extract_product_name_from_soup(soup)
-    product_name = passed_name if passed_name else html_name
+    product_name = clean_text(passed_name)
     if is_generic_name(product_name):
         product_name = "지금 보시는 상품"
 
@@ -476,7 +367,7 @@ div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
   border-bottom-left-radius: 6px;
 }
 
-/* 입력창을 더 위로 올림 */
+/* 입력창을 더 위로 */
 div[data-testid="stChatInput"] {
   position: fixed;
   left: 50%;
@@ -487,7 +378,7 @@ div[data-testid="stChatInput"] {
 }
 @media (max-width: 768px) {
   div[data-testid="stChatInput"] {
-    bottom: 108px;
+    bottom: 120px;
     width: calc(100% - 24px);
   }
 }

@@ -15,9 +15,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# -----------------------------
-# OpenAI
-# -----------------------------
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
 if not OPENAI_API_KEY:
     st.error("OPENAI_API_KEY가 필요합니다. Streamlit Secrets에 OPENAI_API_KEY를 추가해주세요.")
@@ -25,9 +22,6 @@ if not OPENAI_API_KEY:
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# -----------------------------
-# 정책 DB
-# -----------------------------
 POLICY_DB = {
     "shipping": {
         "courier": "CJ 대한통운",
@@ -46,61 +40,24 @@ POLICY_DB = {
         "exchange_fee": 6000,
         "return_fee_rule": "단순 변심 반품: 반품 후 주문금액이 7만원 이상이면 편도 3,000원 / 7만원 미만이면 왕복 6,000원",
         "defect_wrong": "불량/오배송은 미샵 부담입니다."
-    },
-    "payment": {
-        "bank_transfer": "주문 후 3일 이내 입금해야 하며, 미입금 시 자동취소됩니다.",
-        "card": "카드 결제 후 부분취소 가능하며, 불가 카드인 경우 고객센터에서 별도 안내드립니다."
-    },
-    "point": {
-        "use_min": "적립금은 3,000원 이상부터 사용 가능합니다.",
-        "expiry": "유효기간은 적립일로부터 1년입니다.",
-        "purchase": "구매금액의 1% 적립",
-        "text_review": "일반후기 500원",
-        "photo_review": "포토후기 2,000원"
     }
 }
 
-# -----------------------------
-# 시스템 프롬프트
-# -----------------------------
 SYSTEM_PROMPT = """
 너는 '미샵 쇼핑친구 미야언니'다.
-너의 역할은 4050 여성 고객이 쇼핑할 때 친구처럼 같이 봐주되, 전문가처럼 결론을 정리해주는 것이다.
+4050 여성 고객의 쇼핑 결정을 돕고, 반품을 줄이며, 정책/사이즈/코디 질문에 정확히 답한다.
 
-핵심 목표:
-1. 고객이 상품 선택에서 실패하지 않도록 돕기
-2. 반품 가능성을 줄이기
-3. 체형/사이즈/코디/정책 질문에 정확하게 답하기
-
-말투 규칙:
-- 항상 친근하지만 가볍지 않게
-- 결론 먼저 말하고, 근거를 2~3개 설명
-- 과장 금지
-- 모르면 솔직하게 말하기
-- 상품 정보가 부족하면 '정확한 판단은 어렵다'고 말하기
-- 상품명이나 핵심 정보가 불명확하면 함부로 추천하지 않기
-
-답변 구조:
-1. 공감 또는 상황 이해
-2. 결론 (추천 / 주의 / 비추천)
-3. 이유 2~3개
-4. 필요한 경우 추가 질문
-
-중요 규칙:
-- 당일출고 기준은 반드시 '오후 2시 이전 주문'으로만 답한다.
-- 정책 답변은 POLICY_DB 기준으로 답한다.
-- 상품 상담에서는 제공된 product_context를 최우선으로 참고한다.
-- product_context.product_name이 있으면 그 이름만 사용한다.
-- 상품명 못 찾으면 '지금 보시는 상품'이라고 표현한다.
-- SEO용 긴 제목을 상품명처럼 그대로 반복하지 말 것.
-- 상품페이지에서 실제 읽힌 근거 없이 일반론을 남발하지 말 것.
-- 상품 구조 데이터에 없는 내용은 확정적으로 말하지 말 것.
-- 답변은 너무 길지 않게, 4~8문장 정도로 읽기 쉽게 정리할 것.
+규칙:
+- 친근하지만 가볍지 않게
+- 결론 먼저, 근거 2~3개
+- 상품명은 product_context.product_name이 있으면 그것만 사용
+- 상품명 없으면 '지금 보시는 상품'이라고 표현
+- SEO용 긴 제목 반복 금지
+- 정책은 POLICY_DB 기준
+- 확실하지 않은 내용은 단정하지 말 것
+- 답변은 4~8문장 정도로 정리
 """
 
-# -----------------------------
-# 상태
-# -----------------------------
 def ensure_state():
     if "messages" not in st.session_state:
         st.session_state.messages = []
@@ -110,134 +67,29 @@ def ensure_state():
         st.session_state.last_context_key = ""
     if "last_action_nonce" not in st.session_state:
         st.session_state.last_action_nonce = ""
-    if "show_profile_form" not in st.session_state:
-        st.session_state.show_profile_form = False
 
 ensure_state()
 
 def reset_all():
     st.session_state.messages = []
     st.session_state.profile = None
-    st.session_state.show_profile_form = False
 
-# -----------------------------
-# URL / query
-# -----------------------------
 qp = st.query_params
-current_url = qp.get("url", "")
+current_url = qp.get("url", "") or ""
 product_no = qp.get("pn", "") or ""
 product_name_q = qp.get("pname", "") or ""
 action = qp.get("action", "") or ""
 nonce = qp.get("nonce", "") or ""
 
 context_key = f"{current_url}|{product_no}|{product_name_q}"
-
-# 페이지가 바뀌면 이전 대화 초기화
 if context_key != st.session_state.last_context_key:
     st.session_state.last_context_key = context_key
     st.session_state.messages = []
 
-# -----------------------------
-# 헬퍼
-# -----------------------------
 def clean_text(text: str) -> str:
     if not text:
         return ""
     return re.sub(r"\s+", " ", text).strip()
-
-def split_meta_title(title: str) -> str:
-    if not title:
-        return ""
-    for sep in ["|", "-", "–", "—"]:
-        parts = [x.strip() for x in title.split(sep) if x.strip()]
-        if parts and 3 <= len(parts[0]) <= 40:
-            return parts[0]
-    return title.strip()
-
-def find_product_name(soup: BeautifulSoup) -> str:
-    candidates = []
-
-    # 카페24 표준 상품명 우선
-    priority_selectors = [
-        "#span_product_name",
-        "#span_product_name_mobile",
-        ".headingArea h2",
-        ".headingArea h3",
-        ".infoArea .headingArea h2",
-        ".infoArea .headingArea h3",
-        ".prdName",
-        ".name",
-        "h2.name",
-        "h3.name",
-        "h1"
-    ]
-
-    for selector in priority_selectors:
-        try:
-            for tag in soup.select(selector):
-                txt = clean_text(tag.get_text(" ", strip=True))
-                if 3 <= len(txt) <= 40:
-                    candidates.append(txt)
-        except Exception:
-            pass
-
-    # JSON-LD
-    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
-        try:
-            raw = script.string or script.get_text()
-            if not raw:
-                continue
-            data = json.loads(raw)
-            items = data if isinstance(data, list) else [data]
-            for item in items:
-                if isinstance(item, dict) and item.get("@type") == "Product" and item.get("name"):
-                    txt = clean_text(str(item["name"]))
-                    if 3 <= len(txt) <= 40:
-                        candidates.append(txt)
-        except Exception:
-            pass
-
-    # og:title / title
-    og = soup.find("meta", attrs={"property": "og:title"})
-    if og and og.get("content"):
-        txt = split_meta_title(clean_text(og["content"]))
-        if 3 <= len(txt) <= 40:
-            candidates.append(txt)
-
-    if soup.title and soup.title.string:
-        txt = split_meta_title(clean_text(soup.title.string))
-        if 3 <= len(txt) <= 40:
-            candidates.append(txt)
-
-    seen = set()
-    uniq = []
-    for c in candidates:
-        if c not in seen:
-            uniq.append(c)
-            seen.add(c)
-
-    keywords = ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트", "점퍼", "맨투맨"]
-    blacklist = ["미샵", "MISHARP", "상품결제정보", "배송정보", "교환 및 반품정보", "전체상품", "로그인", "회원가입", "장바구니", "마이페이지"]
-
-    def score_name(name: str):
-        score = 0
-        if 4 <= len(name) <= 28:
-            score += 6
-        if any(k in name for k in keywords):
-            score += 6
-        if any(b == name for b in blacklist):
-            score -= 20
-        if len(name) > 32:
-            score -= 3
-        if "/" in name or "|" in name:
-            score -= 2
-        return score
-
-    if not uniq:
-        return ""
-
-    uniq.sort(key=score_name, reverse=True)
-    return uniq[0]
 
 def split_sections(text: str) -> dict:
     if not text:
@@ -296,14 +148,12 @@ def fetch_product_context(url: str, passed_name: str = "") -> dict:
     raw_text = soup.get_text("\n")
     raw_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
 
-    # 푸터에서 넘긴 상품명 우선
-    product_name = clean_text(passed_name) if passed_name else find_product_name(soup)
-
+    product_name = clean_text(passed_name) if passed_name else "지금 보시는 상품"
     sections = split_sections(raw_text)
     category = guess_category(product_name, raw_text)
 
     return {
-        "product_name": product_name if product_name else "지금 보시는 상품",
+        "product_name": product_name,
         "category": category,
         "summary": sections["summary"],
         "material": sections["material"],
@@ -346,13 +196,6 @@ def get_fast_policy_answer(user_text: str) -> str | None:
             f"결제 순서대로 순차 출고됩니다."
         )
 
-    if any(k in q for k in ["배송언제", "언제와", "언제도착", "배송기간"]):
-        return (
-            f"보통 배송은 {POLICY_DB['shipping']['delivery_time']} 정도예요 🙂\n"
-            f"오후 2시 이전 주문은 당일 출고되고,\n"
-            f"이후 주문은 다음 영업일 출고로 보시면 됩니다."
-        )
-
     if any(k in q for k in ["교환", "사이즈교환"]):
         return (
             "교환은 가능해요 🙂\n"
@@ -361,19 +204,9 @@ def get_fast_policy_answer(user_text: str) -> str | None:
             f"단순 변심 교환은 왕복 {POLICY_DB['exchange_return']['exchange_fee']:,}원이에요."
         )
 
-    if any(k in q for k in ["반품", "환불"]):
-        return (
-            "반품도 가능해요 🙂\n"
-            f"{POLICY_DB['exchange_return']['period']} 이내 접수해주시면 되고,\n"
-            f"{POLICY_DB['exchange_return']['return_fee_rule']} 기준으로 진행됩니다."
-        )
-
-    if any(k in q for k in ["합배송"]):
-        return f"{POLICY_DB['shipping']['combined_shipping']} 🙂"
-
     return None
 
-def get_llm_answer(user_text: str, current_url: str, product_no: str | None, product_context: dict | None) -> str:
+def get_llm_answer(user_text: str, current_url: str, product_no: str, product_context: dict | None) -> str:
     context_pack = {
         "policy_db": POLICY_DB,
         "viewer_context": {
@@ -381,8 +214,7 @@ def get_llm_answer(user_text: str, current_url: str, product_no: str | None, pro
             "is_product_page": bool(product_no),
             "product_no": product_no
         },
-        "product_context": product_context,
-        "customer_profile": st.session_state.profile
+        "product_context": product_context
     }
 
     messages = [
@@ -400,11 +232,11 @@ def get_llm_answer(user_text: str, current_url: str, product_no: str | None, pro
         model="gpt-4.1-mini",
         messages=messages,
         temperature=0.35,
-        max_tokens=450
+        max_tokens=420
     )
     return resp.choices[0].message.content
 
-def process_user_message(user_text: str, current_url: str, product_no: str | None, product_context: dict | None):
+def process_user_message(user_text: str, current_url: str, product_no: str, product_context: dict | None):
     st.session_state.messages.append({"role": "user", "content": user_text})
     fast = get_fast_policy_answer(user_text)
     if fast:
@@ -413,14 +245,8 @@ def process_user_message(user_text: str, current_url: str, product_no: str | Non
     answer = get_llm_answer(user_text, current_url, product_no, product_context)
     st.session_state.messages.append({"role": "assistant", "content": answer})
 
-# -----------------------------
-# 현재 상품 컨텍스트
-# -----------------------------
 product_context = fetch_product_context_cached(current_url, product_name_q) if current_url else None
 
-# -----------------------------
-# CSS
-# -----------------------------
 st.markdown("""
 <style>
 .block-container {
@@ -537,15 +363,9 @@ div[data-testid="stChatInput"] {
 </style>
 """, unsafe_allow_html=True)
 
-# -----------------------------
-# 헤더
-# -----------------------------
 st.markdown('<div class="main-title">미샵 쇼핑친구 미야언니</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-subtitle">쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.</div>', unsafe_allow_html=True)
 
-# -----------------------------
-# 빠른 버튼 HTML 한 줄
-# -----------------------------
 encoded_url = urllib.parse.quote(current_url, safe="")
 encoded_pn = urllib.parse.quote(product_no, safe="")
 encoded_pname = urllib.parse.quote(product_name_q, safe="")
@@ -566,40 +386,31 @@ quick_html = f"""
 """
 st.markdown(quick_html, unsafe_allow_html=True)
 
-# -----------------------------
-# action 처리
-# -----------------------------
 if action and nonce and st.session_state.last_action_nonce != nonce:
     st.session_state.last_action_nonce = nonce
 
     if action == "reset":
         reset_all()
         st.rerun()
-
-    if action == "size":
+    elif action == "size":
         process_user_message(
             "지금 보이는 상품 기준으로 사이즈 상담해줘. 결론 먼저 말하고, 근거를 상품 정보 기준으로 설명해줘. 정보가 부족하면 추가 질문해줘.",
             current_url, product_no, product_context
         )
         st.rerun()
-
-    if action == "codi":
+    elif action == "codi":
         process_user_message(
             "지금 보이는 상품 기준으로 코디 추천해줘. 상품 정보에 근거해서만 말해주고, 부족하면 안전하게 표현해줘.",
             current_url, product_no, product_context
         )
         st.rerun()
-
-    if action == "policy":
+    elif action == "policy":
         process_user_message(
             "이 상품 배송이나 교환 반품 핵심만 알려줘.",
             current_url, product_no, product_context
         )
         st.rerun()
 
-# -----------------------------
-# 초기 메시지
-# -----------------------------
 if not st.session_state.messages:
     if product_context:
         name = product_context.get("product_name", "지금 보시는 상품")
@@ -615,32 +426,16 @@ if not st.session_state.messages:
 
 st.divider()
 
-# -----------------------------
-# 대화창
-# -----------------------------
 for msg in st.session_state.messages:
     safe_text = html.escape(msg["content"]).replace("\n", "<br>")
     if msg["role"] == "user":
         st.markdown(
-            f"""
-            <div class="msg-row user">
-              <div class="msg-col">
-                <div class="msg-bubble user">{safe_text}</div>
-              </div>
-            </div>
-            """,
+            f'<div class="msg-row user"><div class="msg-col"><div class="msg-bubble user">{safe_text}</div></div></div>',
             unsafe_allow_html=True
         )
     else:
         st.markdown(
-            f"""
-            <div class="msg-row bot">
-              <div class="msg-col">
-                <div class="msg-name">미야언니</div>
-                <div class="msg-bubble bot">{safe_text}</div>
-              </div>
-            </div>
-            """,
+            f'<div class="msg-row bot"><div class="msg-col"><div class="msg-name">미야언니</div><div class="msg-bubble bot">{safe_text}</div></div></div>',
             unsafe_allow_html=True
         )
 
@@ -652,9 +447,6 @@ if (el) { el.scrollIntoView({behavior: "smooth"}); }
 </script>
 """, unsafe_allow_html=True)
 
-# -----------------------------
-# 입력창
-# -----------------------------
 user_input = st.chat_input("메시지를 입력하세요…")
 if user_input:
     process_user_message(user_input, current_url, product_no, product_context)

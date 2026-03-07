@@ -150,7 +150,6 @@ def clean_text(text: str) -> str:
 def find_product_name(soup: BeautifulSoup) -> str:
     candidates = []
 
-    # 1순위: 실제 상품명 영역으로 보이는 짧은 텍스트 우선
     selectors = [
         ".product_title",
         ".prdName",
@@ -171,14 +170,15 @@ def find_product_name(soup: BeautifulSoup) -> str:
         except Exception:
             pass
 
-    # 2순위: strong/span/div 중 상품명처럼 보이는 짧은 텍스트
     for tag in soup.find_all(["strong", "span", "div"]):
         txt = clean_text(tag.get_text(" ", strip=True))
         if 3 <= len(txt) <= 60:
-            if any(word in txt for word in ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트", "점퍼"]):
+            if any(word in txt for word in [
+                "자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠",
+                "원피스", "팬츠", "데님", "가디건", "코트", "점퍼"
+            ]):
                 candidates.append(txt)
 
-    # 3순위: title, og:title
     if soup.title and soup.title.string:
         candidates.append(clean_text(soup.title.string))
 
@@ -186,7 +186,6 @@ def find_product_name(soup: BeautifulSoup) -> str:
     if og and og.get("content"):
         candidates.append(clean_text(og["content"]))
 
-    # 중복 제거
     seen = set()
     uniq = []
     for c in candidates:
@@ -203,7 +202,10 @@ def find_product_name(soup: BeautifulSoup) -> str:
         score = 0
         if 5 <= len(name) <= 30:
             score += 5
-        if any(x in name for x in ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트", "점퍼"]):
+        if any(x in name for x in [
+            "자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠",
+            "원피스", "팬츠", "데님", "가디건", "코트", "점퍼"
+        ]):
             score += 5
         if "미샵" in name:
             score -= 2
@@ -222,7 +224,6 @@ def find_product_name(soup: BeautifulSoup) -> str:
     filtered.sort(key=score_name, reverse=True)
     best = filtered[0]
 
-    # 너무 긴 SEO 제목이면 앞부분만 자르기보다 배제
     if len(best) > 40 and len(filtered) > 1:
         for alt in filtered[1:]:
             if 4 <= len(alt) <= 30:
@@ -242,7 +243,6 @@ def split_sections(text: str) -> dict:
 
     lines = [clean_text(x) for x in text.split("\n")]
     lines = [x for x in lines if x]
-
     joined = "\n".join(lines)
 
     def extract_by_keywords(keywords, max_len=1200):
@@ -250,8 +250,7 @@ def split_sections(text: str) -> dict:
         for line in lines:
             if any(k in line for k in keywords):
                 matched.append(line)
-        result = " / ".join(matched)
-        return result[:max_len]
+        return " / ".join(matched)[:max_len]
 
     return {
         "summary": joined[:2500],
@@ -428,7 +427,7 @@ def process_user_message(user_text: str, current_url: str, product_no: str | Non
         return
 
     answer = get_llm_answer(user_text, current_url, product_no, product_context)
-    st.session_state.messages.append({"role": "assistant", "content": answer)
+    st.session_state.messages.append({"role": "assistant", "content": answer})
 
 # -----------------------------
 # 체형 입력 폼
@@ -490,13 +489,6 @@ st.markdown("""
 header[data-testid="stHeader"] { height: 0px; }
 div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
 
-.title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
 .main-title {
   font-size: 44px;
   font-weight: 800;
@@ -504,13 +496,11 @@ div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
   margin: 0;
   white-space: nowrap;
 }
-
 .main-subtitle {
   margin-top: 8px;
   color: rgba(255,255,255,0.72);
   font-size: 14px;
 }
-
 @media (max-width: 768px) {
   .main-title {
     font-size: 27px;
@@ -585,9 +575,6 @@ with header_cols[0]:
     st.markdown('<div class="main-subtitle">쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.</div>', unsafe_allow_html=True)
 with header_cols[1]:
     st.write("")
-    if st.button("초기화", use_container_width=True):
-        reset_all()
-        st.rerun()
 
 # -----------------------------
 # 초기 메시지

@@ -59,9 +59,6 @@ POLICY_DB = {
     }
 }
 
-# -----------------------------
-# 시스템 프롬프트
-# -----------------------------
 SYSTEM_PROMPT = """
 너는 '미샵 쇼핑친구 미야언니'다.
 너의 역할은 4050 여성 고객이 쇼핑할 때 친구처럼 같이 봐주되, 전문가처럼 결론을 정리해주는 것이다.
@@ -112,6 +109,8 @@ def ensure_state():
         st.session_state.last_action_key = ""
     if "show_profile_form" not in st.session_state:
         st.session_state.show_profile_form = False
+    if "last_context_url" not in st.session_state:
+        st.session_state.last_context_url = ""
 
 ensure_state()
 
@@ -148,44 +147,29 @@ def split_meta_title(title: str) -> str:
         return ""
     for sep in ["|", "-", "–", "—"]:
         parts = [x.strip() for x in title.split(sep) if x.strip()]
-        if parts and len(parts[0]) <= 35:
+        if parts and 3 <= len(parts[0]) <= 40:
             return parts[0]
     return title.strip()
 
 def find_product_name(soup: BeautifulSoup) -> str:
     candidates = []
 
-    # 1순위: JSON-LD Product name
-    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
-        try:
-            raw = script.string or script.get_text()
-            if not raw:
-                continue
-            data = json.loads(raw)
-            items = data if isinstance(data, list) else [data]
-            for item in items:
-                if isinstance(item, dict):
-                    item_type = item.get("@type", "")
-                    if item_type == "Product" and item.get("name"):
-                        name = clean_text(str(item["name"]))
-                        if 3 <= len(name) <= 40:
-                            candidates.append(name)
-        except Exception:
-            pass
-
-    # 2순위: 실제 상품명 영역 셀렉터
-    selectors = [
+    # 1순위: 카페24 표준 상품명 셀렉터
+    priority_selectors = [
+        "#span_product_name",
+        "#span_product_name_mobile",
         ".headingArea h2",
         ".headingArea h3",
-        ".infoArea h2",
-        ".infoArea h3",
+        ".infoArea .headingArea h2",
+        ".infoArea .headingArea h3",
         ".prdName",
         ".name",
         "h2.name",
         "h3.name",
         "h1"
     ]
-    for selector in selectors:
+
+    for selector in priority_selectors:
         try:
             for tag in soup.select(selector):
                 txt = clean_text(tag.get_text(" ", strip=True))
@@ -194,41 +178,33 @@ def find_product_name(soup: BeautifulSoup) -> str:
         except Exception:
             pass
 
-    # 3순위: 짧고 상품명 같은 텍스트
-    keywords = ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트", "점퍼", "맨투맨"]
-    for tag in soup.find_all(["strong", "span", "div"]):
-        txt = clean_text(tag.get_text(" ", strip=True))
-        if 4 <= len(txt) <= 35 and any(k in txt for k in keywords):
-            candidates.append(txt)
+    # 2순위: JSON-LD Product name
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        try:
+            raw = script.string or script.get_text()
+            if not raw:
+                continue
+            data = json.loads(raw)
+            items = data if isinstance(data, list) else [data]
+            for item in items:
+                if isinstance(item, dict) and item.get("@type") == "Product" and item.get("name"):
+                    txt = clean_text(str(item["name"]))
+                    if 3 <= len(txt) <= 40:
+                        candidates.append(txt)
+        except Exception:
+            pass
 
-    # 4순위: og:title / title
+    # 3순위: og:title, title
     og = soup.find("meta", attrs={"property": "og:title"})
     if og and og.get("content"):
-        og_title = split_meta_title(clean_text(og["content"]))
-        if 3 <= len(og_title) <= 40:
-            candidates.append(og_title)
+        txt = split_meta_title(clean_text(og["content"]))
+        if 3 <= len(txt) <= 40:
+            candidates.append(txt)
 
     if soup.title and soup.title.string:
-        page_title = split_meta_title(clean_text(soup.title.string))
-        if 3 <= len(page_title) <= 40:
-            candidates.append(page_title)
-
-    # 점수화
-    blacklist = ["미샵", "MISHARP", "상품결제정보", "배송정보", "교환 및 반품정보", "전체상품", "로그인", "회원가입", "장바구니", "마이페이지"]
-
-    def score_name(name: str):
-        score = 0
-        if 5 <= len(name) <= 28:
-            score += 6
-        if any(k in name for k in keywords):
-            score += 6
-        if any(b == name for b in blacklist):
-            score -= 10
-        if len(name) > 32:
-            score -= 2
-        if "/" in name or "|" in name:
-            score -= 2
-        return score
+        txt = split_meta_title(clean_text(soup.title.string))
+        if 3 <= len(txt) <= 40:
+            candidates.append(txt)
 
     seen = set()
     uniq = []
@@ -236,6 +212,23 @@ def find_product_name(soup: BeautifulSoup) -> str:
         if c not in seen:
             uniq.append(c)
             seen.add(c)
+
+    keywords = ["자켓", "슬랙스", "니트", "티셔츠", "블라우스", "셔츠", "원피스", "팬츠", "데님", "가디건", "코트", "점퍼", "맨투맨"]
+    blacklist = ["미샵", "MISHARP", "상품결제정보", "배송정보", "교환 및 반품정보", "전체상품", "로그인", "회원가입", "장바구니", "마이페이지"]
+
+    def score_name(name: str):
+        score = 0
+        if 4 <= len(name) <= 28:
+            score += 6
+        if any(k in name for k in keywords):
+            score += 6
+        if any(b == name for b in blacklist):
+            score -= 20
+        if len(name) > 32:
+            score -= 3
+        if "/" in name or "|" in name:
+            score -= 2
+        return score
 
     if not uniq:
         return ""
@@ -470,7 +463,11 @@ current_url = query.get("url", "")
 product_no = extract_product_no(current_url)
 is_product_page = bool(product_no)
 
-# 현재 URL 기준으로 항상 최신 상품 컨텍스트 반영
+# URL이 바뀌면 대화 초기화 (다른 상품으로 옮겨갔을 때 이전 상품명 방지)
+if current_url != st.session_state.last_context_url:
+    st.session_state.last_context_url = current_url
+    st.session_state.messages = []
+
 product_context = fetch_product_context_cached(current_url) if current_url else None
 
 # -----------------------------
@@ -479,7 +476,7 @@ product_context = fetch_product_context_cached(current_url) if current_url else 
 st.markdown("""
 <style>
 .block-container {
-  padding-top: calc(4.2rem + env(safe-area-inset-top));
+  padding-top: calc(4.4rem + env(safe-area-inset-top));
   padding-bottom: 5.2rem;
   max-width: 760px;
 }
@@ -501,7 +498,7 @@ div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
 
 @media (max-width: 768px) {
   .block-container {
-    padding-top: calc(5.4rem + env(safe-area-inset-top));
+    padding-top: calc(5.8rem + env(safe-area-inset-top));
     padding-bottom: 5rem;
   }
   .main-title {
@@ -513,27 +510,28 @@ div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
   }
 }
 
-/* 상단 4버튼 한 줄 고정 */
-.quick-buttons div[data-testid="stHorizontalBlock"] {
+/* 버튼 4개 한 줄 강제 */
+.quick-row-marker + div[data-testid="stHorizontalBlock"] {
   flex-wrap: nowrap !important;
   gap: 0.35rem !important;
 }
-.quick-buttons div[data-testid="column"] {
+.quick-row-marker + div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
   min-width: 0 !important;
   flex: 1 1 0 !important;
 }
-.quick-buttons button {
+.quick-row-marker + div[data-testid="stHorizontalBlock"] button {
   white-space: nowrap !important;
+  width: 100% !important;
   font-size: 13px !important;
-  padding-left: 0.3rem !important;
-  padding-right: 0.3rem !important;
+  padding-left: 0.2rem !important;
+  padding-right: 0.2rem !important;
 }
 @media (max-width: 768px) {
-  .quick-buttons button {
+  .quick-row-marker + div[data-testid="stHorizontalBlock"] button {
     font-size: 11px !important;
     min-height: 40px !important;
-    padding-left: 0.15rem !important;
-    padding-right: 0.15rem !important;
+    padding-left: 0.1rem !important;
+    padding-right: 0.1rem !important;
   }
 }
 
@@ -590,7 +588,7 @@ div[data-testid="stChatInput"] {
 # -----------------------------
 # 상단 헤더
 # -----------------------------
-st.markdown(f'<div class="main-title">미샵 쇼핑친구 미야언니</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">미샵 쇼핑친구 미야언니</div>', unsafe_allow_html=True)
 st.markdown('<div class="main-subtitle">쇼핑 고민될 때, 친구처럼 같이 보고 전문가처럼 딱 정리해드릴게요.</div>', unsafe_allow_html=True)
 
 # -----------------------------
@@ -612,7 +610,7 @@ if not st.session_state.messages:
 # -----------------------------
 # 상단 버튼 4개 한 줄
 # -----------------------------
-st.markdown('<div class="quick-buttons">', unsafe_allow_html=True)
+st.markdown('<div class="quick-row-marker"></div>', unsafe_allow_html=True)
 btn_cols = st.columns(4)
 
 if btn_cols[0].button("초기화", use_container_width=True, key="top_reset_btn"):
@@ -642,8 +640,6 @@ if btn_cols[3].button("배송/교환", use_container_width=True):
             current_url, product_no, product_context
         )
         st.rerun()
-
-st.markdown('</div>', unsafe_allow_html=True)
 
 if st.session_state.show_profile_form:
     with st.expander("정확한 추천 받기 (체형 입력 30초)", expanded=True):

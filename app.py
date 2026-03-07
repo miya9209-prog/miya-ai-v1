@@ -112,7 +112,7 @@ def debounce(action_key: str, min_sec: float = 0.8) -> bool:
     return True
 
 # -----------------------------
-# URL / 상품텍스트
+# URL / 상품 텍스트
 # -----------------------------
 def extract_product_no(url: str) -> str | None:
     if not url:
@@ -139,7 +139,7 @@ def fetch_page_text_cached(url: str) -> str:
     return fetch_page_text(url)
 
 # -----------------------------
-# 빠른 정책 응답 (GPT 없이)
+# 빠른 정책 응답
 # -----------------------------
 def get_fast_policy_answer(user_text: str) -> str | None:
     q = user_text.replace(" ", "").lower()
@@ -147,7 +147,7 @@ def get_fast_policy_answer(user_text: str) -> str | None:
     if any(k in q for k in ["배송비", "무료배송"]):
         return (
             f"배송은 {POLICY_DB['shipping']['courier']}를 이용하고요 🙂\n"
-            f"배송비는 {POLICY_DB['shipping']['shipping_fee']:,}원, "
+            f"배송비는 {POLICY_DB['shipping']['shipping_fee']:,}원이고, "
             f"{POLICY_DB['shipping']['free_shipping_over']:,}원 이상 구매 시 무료배송이에요."
         )
 
@@ -169,7 +169,7 @@ def get_fast_policy_answer(user_text: str) -> str | None:
         return (
             "교환은 가능해요 🙂\n"
             f"{POLICY_DB['exchange_return']['exchange_possible']}이고,\n"
-            f"{POLICY_DB['exchange_return']['period']} 접수해주시면 됩니다.\n"
+            f"{POLICY_DB['exchange_return']['period']} 이내 접수해주시면 됩니다.\n"
             f"단순 변심 교환은 왕복 {POLICY_DB['exchange_return']['exchange_fee']:,}원이에요."
         )
 
@@ -181,14 +181,11 @@ def get_fast_policy_answer(user_text: str) -> str | None:
         )
 
     if any(k in q for k in ["합배송"]):
-        return (
-            f"{POLICY_DB['shipping']['combined_shipping']} 🙂"
-        )
+        return f"{POLICY_DB['shipping']['combined_shipping']} 🙂"
 
     if any(k in q for k in ["적립금"]):
         return (
-            f"{POLICY_DB['point']['use_min']} "
-            f"{POLICY_DB['point']['expiry']}\n"
+            f"{POLICY_DB['point']['use_min']} {POLICY_DB['point']['expiry']}\n"
             f"기본적으로 {POLICY_DB['point']['purchase']}되고,\n"
             f"후기는 일반 {POLICY_DB['point']['text_review']}, 포토 {POLICY_DB['point']['photo_review']}이에요 🙂"
         )
@@ -221,7 +218,6 @@ def get_llm_answer(user_text: str, current_url: str, product_no: str | None, pag
         {"role": "system", "content": "참고 데이터(JSON):\n" + json.dumps(context_pack, ensure_ascii=False)}
     ]
 
-    # 최근 대화 8개만 사용 (속도 개선)
     history = st.session_state.messages[-8:]
     for m in history:
         messages.append({"role": m["role"], "content": m["content"]})
@@ -240,16 +236,13 @@ def get_llm_answer(user_text: str, current_url: str, product_no: str | None, pag
 # 메시지 처리
 # -----------------------------
 def process_user_message(user_text: str, current_url: str, product_no: str | None, page_text: str):
-    # 고객 메시지는 즉시 추가
     st.session_state.messages.append({"role": "user", "content": user_text})
 
-    # 정책 질문이면 즉답
     fast = get_fast_policy_answer(user_text)
     if fast:
         st.session_state.messages.append({"role": "assistant", "content": fast})
         return
 
-    # GPT 호출
     answer = get_llm_answer(user_text, current_url, product_no, page_text)
     st.session_state.messages.append({"role": "assistant", "content": answer})
 
@@ -266,6 +259,7 @@ def profile_form():
         weight = st.selectbox("몸무게(선택)", ["선택", "45 이하", "46~50", "51~55", "56~60", "61~65", "66 이상"])
         tpo = st.selectbox("스타일/TPO", ["선택", "출근룩", "모임룩", "데일리룩", "여행룩"])
     concerns = st.multiselect("체형 고민(복수)", ["복부", "팔뚝", "힙", "허벅지", "상체통통", "하체통통", "전체통통"])
+
     colA, colB = st.columns([1, 1])
     with colA:
         ok = st.button("입력 완료", use_container_width=True)
@@ -304,88 +298,76 @@ page_text = st.session_state.page_text
 # -----------------------------
 st.markdown("""
 <style>
-.block-container { padding-top: 1.8rem; padding-bottom: 6rem; max-width: 760px; }
+.block-container {
+  padding-top: 1.8rem;
+  padding-bottom: 6rem;
+  max-width: 760px;
+}
 header[data-testid="stHeader"] { height: 0px; }
 div[data-testid="stToolbar"] { visibility: hidden; height: 0px; }
 
-.chat-wrap{
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.08);
+.msg-row {
+  display: flex;
+  width: 100%;
+  margin: 12px 0;
+}
+.msg-row.user {
+  justify-content: flex-end;
+}
+.msg-row.bot {
+  justify-content: flex-start;
+}
+.msg-col {
+  max-width: 78%;
+}
+.msg-name {
+  font-size: 12px;
+  opacity: .72;
+  margin: 0 0 4px 4px;
+}
+.msg-bubble {
+  padding: 12px 14px;
   border-radius: 18px;
-  padding: 16px 14px 10px 14px;
-  min-height: 360px;
+  font-size: 15px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: keep-all;
+}
+.msg-bubble.user {
+  background: #2f3640;
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+.msg-bubble.bot {
+  background: #111827;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-bottom-left-radius: 6px;
 }
 
-.msg-row{
-  display:flex;
-  width:100%;
-  margin:10px 0;
+.input-hint {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 10px;
+  width: min(720px, calc(100% - 24px));
+  background: rgba(0,0,0,.65);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px;
+  padding: 9px 12px;
+  color: rgba(255,255,255,.82);
+  font-size: 13px;
+  z-index: 9998;
+  backdrop-filter: blur(10px);
 }
 
-.msg-row.user{
-  justify-content:flex-end;
-}
-
-.msg-row.bot{
-  justify-content:flex-start;
-}
-
-.msg-bubble{
-  max-width:78%;
-  padding:12px 14px;
-  border-radius:18px;
-  font-size:15px;
-  line-height:1.6;
-  white-space:pre-wrap;
-  word-break:keep-all;
-}
-
-.msg-bubble.user{
-  background:#2f3640;
-  color:#fff;
-  border-bottom-right-radius:6px;
-}
-
-.msg-bubble.bot{
-  background:#111827;
-  color:#fff;
-  border:1px solid rgba(255,255,255,0.08);
-  border-bottom-left-radius:6px;
-}
-
-.msg-name{
-  font-size:12px;
-  opacity:.7;
-  margin-bottom:4px;
-}
-
-.quick-row{
-  margin:10px 0 14px 0;
-}
-
-.input-hint{
-  position:fixed;
-  left:50%;
-  transform:translateX(-50%);
-  bottom:10px;
-  width:min(720px, calc(100% - 24px));
-  background:rgba(0,0,0,.65);
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:14px;
-  padding:9px 12px;
-  color:rgba(255,255,255,.82);
-  font-size:13px;
-  z-index:9998;
-  backdrop-filter:blur(10px);
-}
-
-div[data-testid="stChatInput"]{
-  position:fixed;
-  left:50%;
-  transform:translateX(-50%);
-  bottom:48px;
-  width:min(720px, calc(100% - 24px));
-  z-index:9999;
+div[data-testid="stChatInput"] {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 48px;
+  width: min(720px, calc(100% - 24px));
+  z-index: 9999;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -402,7 +384,9 @@ with top[1]:
         reset_all()
         st.rerun()
 
+# -----------------------------
 # 초기 메시지
+# -----------------------------
 if not st.session_state.messages:
     if is_product_page:
         st.session_state.messages.append({
@@ -464,19 +448,20 @@ if st.session_state.show_profile_form:
     with st.expander("정확한 추천 받기 (체형 입력 30초)", expanded=True):
         profile_form()
 
-# -----------------------------
-# 대화창
-# -----------------------------
-st.markdown('<div class="chat-wrap">', unsafe_allow_html=True)
+st.divider()
 
+# -----------------------------
+# 대화창 (빈 박스 제거)
+# -----------------------------
 for msg in st.session_state.messages:
-    role = msg["role"]
     safe_text = html.escape(msg["content"]).replace("\n", "<br>")
-    if role == "user":
+    if msg["role"] == "user":
         st.markdown(
             f"""
             <div class="msg-row user">
-              <div class="msg-bubble user">{safe_text}</div>
+              <div class="msg-col">
+                <div class="msg-bubble user">{safe_text}</div>
+              </div>
             </div>
             """,
             unsafe_allow_html=True
@@ -485,7 +470,7 @@ for msg in st.session_state.messages:
         st.markdown(
             f"""
             <div class="msg-row bot">
-              <div>
+              <div class="msg-col">
                 <div class="msg-name">미야언니</div>
                 <div class="msg-bubble bot">{safe_text}</div>
               </div>
@@ -494,7 +479,7 @@ for msg in st.session_state.messages:
             unsafe_allow_html=True
         )
 
-st.markdown('<div id="chat-bottom"></div></div>', unsafe_allow_html=True)
+st.markdown('<div id="chat-bottom"></div>', unsafe_allow_html=True)
 
 # 자동 스크롤
 st.markdown("""
@@ -508,7 +493,10 @@ if (el) { el.scrollIntoView({behavior: "smooth"}); }
 # 입력창
 # -----------------------------
 user_input = st.chat_input("메시지를 입력하세요…")
-st.markdown('<div class="input-hint">여기서 바로 질문하면, 고객님 말은 오른쪽 / 미야언니 답변은 왼쪽에 보여드릴게요 🙂</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="input-hint">여기서 바로 질문하면, 고객님 말은 오른쪽 / 미야언니 답변은 왼쪽에 보여드릴게요 🙂</div>',
+    unsafe_allow_html=True
+)
 
 if user_input:
     if debounce("chat_send"):

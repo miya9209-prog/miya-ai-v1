@@ -430,7 +430,7 @@ st.markdown(
         미샵 쇼핑친구 <span style="color:#0f6a63;">미야언니</span>
       </div>
       <div style="margin-top:6px; font-size:13.5px; line-height:1.35; color:#5f6471;">
-        24시간 언제나 미샵님들 쇼핑 판단에 도움드리는 스마트한 쇼핑친구
+        24시간 언제나 쇼핑 판단에 도움드리는 스마트한 쇼핑친구
       </div>
     </div>
     """,
@@ -499,7 +499,7 @@ if not st.session_state.messages:
         "content": (
             "안녕하세요? 옷 같이 봐드리는 미야언니예요 :) \n"
             "'지금 보시는 상품' 기준으로 제가 같이 봐드릴게요. \n"
-            "사이즈, 코디, 배송, 교환 중 뭐부터 이야기해볼까요?"
+            "사이즈, 코디, 배송 중 뭐부터 이야기해볼까요?"
         )
     })
 

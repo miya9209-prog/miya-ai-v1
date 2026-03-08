@@ -500,7 +500,7 @@ if not st.session_state.messages:
     st.session_state.messages.append({
         "role": "assistant",
         "content": (
-           "안녕하세요? 옷 같이 봐드리는 미야언니예요 :) \n"
+"안녕하세요? 옷 같이 봐드리는 미야언니예요 :) \n"
 "'지금 보시는 상품' 기준으로 제가 같이 봐드릴게요. \n"
 "사이즈, 코디, 배송, 교환 중 뭐부터 이야기해볼까요?"
         )

@@ -119,9 +119,7 @@ def is_generic_name(name: str) -> bool:
     if not name:
         return True
     name = clean_text(name)
-    if name in GENERIC_NAMES:
-        return True
-    if len(name) <= 2:
+    if name in GENERIC_NAMES or len(name) <= 2:
         return True
     return False
 
@@ -170,7 +168,7 @@ def guess_category(name: str, text: str) -> str:
     return "기타"
 
 
-def fetch_product_context(url: str, passed_name: str = "") -> dict:
+def fetch_product_context(url: str, passed_name: str = "") -> dict | None:
     if not url:
         return None
 
@@ -205,7 +203,7 @@ def fetch_product_context(url: str, passed_name: str = "") -> dict:
 
 
 @st.cache_data(ttl=300, show_spinner=False)
-def fetch_product_context_cached(url: str, passed_name: str = "") -> dict:
+def fetch_product_context_cached(url: str, passed_name: str = "") -> dict | None:
     try:
         return fetch_product_context(url, passed_name)
     except Exception as e:
@@ -335,97 +333,32 @@ div[data-testid="stToolbar"] {display:none;}
 #MainMenu {visibility:hidden;}
 footer {visibility:hidden;}
 
-:root{
-  --miya-accent:#0f6a63;
-  --miya-title:#303443;
-  --miya-sub:#5b6170;
-  --miya-muted:#737987;
-  --miya-divider:#cfcfd4;
-  --miya-bot-bg:#071b4e;
-  --miya-user-bg:#dff0ec;
-  --miya-user-text:#1f3b36;
-}
-
 .block-container{
   max-width:760px;
   padding-top:0.22rem !important;
   padding-bottom:11.2rem !important;
 }
 
-/* 제목 */
-.miya-top{
-  text-align:center;
-  margin:0 0 8px 0;
-}
-
-.miya-title{
-  font-size:31px;
-  font-weight:800;
-  line-height:1.1;
-  letter-spacing:-0.02em;
-  margin:0;
-  color:var(--miya-title);
-}
-
-.miya-title-accent{
-  color:var(--miya-accent);
-}
-
-.miya-sub-visible{
-  display:block !important;
-  margin-top:6px;
-  font-size:11.5px;
-  line-height:1.35;
-  color:var(--miya-sub) !important;
-  text-align:center;
-  white-space:normal;
-}
-
-/* 사이즈 영역 */
-.miya-profile-wrap{
-  margin-top:2px;
-  margin-bottom:4px;
-}
-
-.miya-profile-label-visible{
-  display:block !important;
-  font-size:13px;
-  font-weight:700;
-  margin-bottom:4px;
-  color:var(--miya-title) !important;
-  line-height:1.2;
-}
-
-.miya-profile-help-visible{
-  display:inline !important;
-  font-size:11px;
-  font-weight:500;
-  color:var(--miya-muted) !important;
-  margin-left:0;
-}
-
-.miya-profile-box{
-  padding:6px 8px 0 8px;
-  border:1px solid rgba(0,0,0,.04);
-  border-radius:14px;
-  background:transparent;
+:root{
+  --miya-accent:#0f6a63;
+  --miya-title:#303443;
+  --miya-sub:#5f6471;
+  --miya-muted:#7a7f8c;
+  --miya-divider:#ccccd2;
+  --miya-bot-bg:#071b4e;
+  --miya-user-bg:#dff0ec;
+  --miya-user-text:#1f3b36;
 }
 
 div[data-testid="column"]{
   min-width:0 !important;
 }
 
-div[data-testid="stTextInput"],
-div[data-testid="stSelectbox"]{
-  margin-bottom:-2px !important;
-}
-
 div[data-testid="stTextInput"] label,
 div[data-testid="stSelectbox"] label{
-  font-size:11.5px !important;
-  font-weight:700 !important;
   color:var(--miya-title) !important;
-  margin-bottom:0 !important;
+  font-weight:700 !important;
+  font-size:11.5px !important;
 }
 
 div[data-testid="stTextInput"] input,
@@ -433,81 +366,17 @@ div[data-baseweb="select"] > div{
   border-radius:12px !important;
 }
 
-.miya-current{
-  margin-top:3px;
-  margin-bottom:2px;
-  font-size:10.8px;
-  color:var(--miya-muted) !important;
+div[data-testid="stTextInput"],
+div[data-testid="stSelectbox"]{
+  margin-bottom:-2px !important;
 }
 
-/* divider */
 hr{
   margin-top:8px !important;
   margin-bottom:8px !important;
   border-color:var(--miya-divider) !important;
 }
 
-/* 말풍선 */
-.msg-row{
-  display:flex;
-  width:100%;
-  margin:8px 0;
-}
-
-.msg-row.user{
-  justify-content:flex-end;
-}
-
-.msg-row.bot{
-  justify-content:flex-start;
-}
-
-.msg-col{
-  max-width:82%;
-}
-
-.msg-name-visible{
-  display:block !important;
-  font-size:12px;
-  font-weight:700;
-  line-height:1.2;
-  margin:0 0 5px 6px;
-}
-
-.bot-name{
-  color:#5c6473 !important;
-}
-
-.user-name{
-  color:var(--miya-accent) !important;
-  text-align:right;
-  margin:0 6px 5px 0;
-}
-
-.msg-bubble{
-  padding:12px 14px;
-  border-radius:18px;
-  font-size:15px;
-  line-height:1.62;
-  white-space:pre-wrap;
-  word-break:keep-all;
-}
-
-.msg-bubble.bot{
-  background:var(--miya-bot-bg);
-  color:#ffffff;
-  border:1px solid rgba(255,255,255,.08);
-  border-bottom-left-radius:6px;
-}
-
-.msg-bubble.user{
-  background:var(--miya-user-bg);
-  color:var(--miya-user-text);
-  border:1px solid rgba(15,106,99,.14);
-  border-bottom-right-radius:6px;
-}
-
-/* 입력창 */
 div[data-testid="stChatInput"]{
   position:fixed !important;
   left:50% !important;
@@ -517,50 +386,11 @@ div[data-testid="stChatInput"]{
   z-index:9999 !important;
 }
 
-/* 모바일 */
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
     padding-top:0.14rem !important;
     padding-bottom:11.9rem !important;
-  }
-
-  .miya-top{
-    margin-bottom:6px;
-  }
-
-  .miya-title{
-    font-size:24px;
-    line-height:1.12;
-  }
-
-  .miya-sub-visible{
-    display:block !important;
-    font-size:10px;
-    line-height:1.3;
-    margin-top:4px;
-    padding:0 8px;
-  }
-
-  .miya-profile-wrap{
-    margin-top:1px;
-    margin-bottom:3px;
-  }
-
-  .miya-profile-label-visible{
-    display:block !important;
-    font-size:12px;
-    margin-bottom:3px;
-  }
-
-  .miya-profile-help-visible{
-    display:inline !important;
-    font-size:10px;
-  }
-
-  .miya-profile-box{
-    padding:4px 6px 0 6px;
-    border-radius:12px;
   }
 
   div[data-testid="stHorizontalBlock"]{
@@ -572,43 +402,19 @@ div[data-testid="stChatInput"]{
     min-width:0 !important;
   }
 
-  div[data-testid="stTextInput"],
-  div[data-testid="stSelectbox"]{
-    margin-bottom:-4px !important;
-  }
-
   div[data-testid="stTextInput"] label,
   div[data-testid="stSelectbox"] label{
     font-size:11px !important;
   }
 
+  div[data-testid="stTextInput"],
+  div[data-testid="stSelectbox"]{
+    margin-bottom:-4px !important;
+  }
+
   hr{
     margin-top:5px !important;
     margin-bottom:5px !important;
-  }
-
-  .msg-row{
-    margin:6px 0;
-  }
-
-  .msg-col{
-    max-width:86%;
-  }
-
-  .msg-name-visible{
-    display:block !important;
-    font-size:11px;
-    margin:0 0 4px 6px;
-  }
-
-  .user-name{
-    margin:0 6px 4px 0;
-  }
-
-  .msg-bubble{
-    font-size:14px;
-    line-height:1.56;
-    padding:11px 13px;
   }
 
   div[data-testid="stChatInput"]{
@@ -621,9 +427,13 @@ div[data-testid="stChatInput"]{
 
 st.markdown(
     """
-    <div class="miya-top">
-      <div class="miya-title">미샵 쇼핑친구 <span class="miya-title-accent">미야언니</span></div>
-      <div class="miya-sub-visible">24시간 언제나 미샵님들 쇼핑 판단에 도움드리는 스마트한 쇼핑친구</div>
+    <div style="text-align:center; margin:0 0 8px 0;">
+      <div style="font-size:31px; font-weight:800; line-height:1.1; letter-spacing:-0.02em; color:#303443;">
+        미샵 쇼핑친구 <span style="color:#0f6a63;">미야언니</span>
+      </div>
+      <div style="margin-top:6px; font-size:11.5px; line-height:1.35; color:#5f6471;">
+        24시간 언제나 미샵님들 쇼핑 판단에 도움드리는 스마트한 쇼핑친구
+      </div>
     </div>
     """,
     unsafe_allow_html=True
@@ -631,9 +441,11 @@ st.markdown(
 
 st.markdown(
     """
-    <div class="miya-profile-wrap">
-      <div class="miya-profile-label-visible">사이즈 입력<span class="miya-profile-help-visible">(더 구체적인 상담 가능)</span></div>
-      <div class="miya-profile-box">
+    <div style="margin-top:2px; margin-bottom:4px;">
+      <div style="font-size:13px; font-weight:700; line-height:1.2; color:#303443; margin-bottom:4px;">
+        사이즈 입력<span style="font-size:11px; font-weight:500; color:#7a7f8c;">(더 구체적인 상담 가능)</span>
+      </div>
+      <div style="padding:6px 8px 0 8px; border:1px solid rgba(0,0,0,.04); border-radius:14px; background:transparent;">
     """,
     unsafe_allow_html=True
 )
@@ -646,7 +458,6 @@ with row1[0]:
         placeholder="cm",
         key="body_height_input"
     )
-
 with row1[1]:
     st.session_state.body_weight = st.text_input(
         "체중",
@@ -666,7 +477,6 @@ with row2[0]:
         index=size_options.index(current_top),
         key="body_top_input"
     )
-
 with row2[1]:
     current_bottom = st.session_state.body_bottom if st.session_state.body_bottom in size_options else ""
     st.session_state.body_bottom = st.selectbox(
@@ -681,7 +491,7 @@ st.markdown("</div></div>", unsafe_allow_html=True)
 body_summary = build_body_context_text(build_body_context())
 if any(build_body_context().values()):
     st.markdown(
-        f'<div class="miya-current">현재 입력 정보: {html.escape(body_summary)}</div>',
+        f'<div style="margin-top:3px; margin-bottom:2px; font-size:10.8px; color:#7a7f8c;">현재 입력 정보: {html.escape(body_summary)}</div>',
         unsafe_allow_html=True
     )
 
@@ -703,10 +513,14 @@ for msg in st.session_state.messages:
     if msg["role"] == "user":
         st.markdown(
             f"""
-            <div class="msg-row user">
-              <div class="msg-col">
-                <div class="msg-name-visible user-name">고객님</div>
-                <div class="msg-bubble user">{safe_text}</div>
+            <div style="display:flex; justify-content:flex-end; width:100%; margin:8px 0;">
+              <div style="max-width:82%;">
+                <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#0f6a63; text-align:right; margin:0 6px 5px 0;">
+                  고객님
+                </div>
+                <div style="padding:12px 14px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.62; white-space:pre-wrap; word-break:keep-all; background:#dff0ec; color:#1f3b36; border:1px solid rgba(15,106,99,.14);">
+                  {safe_text}
+                </div>
               </div>
             </div>
             """,
@@ -715,10 +529,14 @@ for msg in st.session_state.messages:
     else:
         st.markdown(
             f"""
-            <div class="msg-row bot">
-              <div class="msg-col">
-                <div class="msg-name-visible bot-name">미야언니</div>
-                <div class="msg-bubble bot">{safe_text}</div>
+            <div style="display:flex; justify-content:flex-start; width:100%; margin:8px 0;">
+              <div style="max-width:82%;">
+                <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#5f6471; margin:0 0 5px 6px;">
+                  미야언니
+                </div>
+                <div style="padding:12px 14px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.62; white-space:pre-wrap; word-break:keep-all; background:#071b4e; color:#ffffff; border:1px solid rgba(255,255,255,.08);">
+                  {safe_text}
+                </div>
               </div>
             </div>
             """,

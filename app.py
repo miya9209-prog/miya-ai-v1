@@ -370,8 +370,8 @@ div[data-testid="stSelectbox"]{
 }
 
 hr{
-  margin-top:6px !important;
-  margin-bottom:6px !important;
+  margin-top:4px !important;
+  margin-bottom:4px !important;
   border-color:var(--miya-divider) !important;
 }
 
@@ -411,8 +411,8 @@ div[data-testid="stChatInput"]{
   }
 
   hr{
-    margin-top:4px !important;
-    margin-bottom:4px !important;
+    margin-top:3px !important;
+    margin-bottom:3px !important;
   }
 
   div[data-testid="stChatInput"]{
@@ -510,34 +510,26 @@ for msg in st.session_state.messages:
 
     if msg["role"] == "user":
         st.markdown(
-            f"""
-            <div style="display:flex; justify-content:flex-end; width:100%; margin:4px 0 6px 0;">
-              <div style="max-width:92%;">
-                <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#0f6a63; text-align:right; margin:0 6px 2px 0;">
-                  고객님
-                </div>
-                <div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.55; white-space:pre-wrap; word-break:keep-all; background:#dff0ec; color:#1f3b36; border:1px solid rgba(15,106,99,.14);">
-                  {safe_text}
-                </div>
-              </div>
-            </div>
-            """,
+            (
+                '<div style="display:flex; justify-content:flex-end; width:100%; margin:2px 0 4px 0;">'
+                '<div style="max-width:92%;">'
+                '<div style="display:block; font-size:12px; font-weight:700; line-height:1.15; color:#0f6a63; text-align:right; margin:0 6px 1px 0;">고객님</div>'
+                f'<div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.5; white-space:pre-wrap; word-break:keep-all; background:#dff0ec; color:#1f3b36; border:1px solid rgba(15,106,99,.14);">{safe_text}</div>'
+                '</div>'
+                '</div>'
+            ),
             unsafe_allow_html=True
         )
     else:
         st.markdown(
-            f"""
-            <div style="display:flex; justify-content:flex-start; width:100%; margin:4px 0 6px 0;">
-              <div style="max-width:92%;">
-                <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#5f6471; margin:0 0 2px 6px;">
-                  미야언니
-                </div>
-                <div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.55; white-space:pre-wrap; word-break:keep-all; background:#071b4e; color:#ffffff; border:1px solid rgba(255,255,255,.08);">
-                  {safe_text}
-                </div>
-              </div>
-            </div>
-            """,
+            (
+                '<div style="display:flex; justify-content:flex-start; width:100%; margin:2px 0 4px 0;">'
+                '<div style="max-width:92%;">'
+                '<div style="display:block; font-size:12px; font-weight:700; line-height:1.15; color:#5f6471; margin:0 0 1px 6px;">미야언니</div>'
+                f'<div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.5; white-space:pre-wrap; word-break:keep-all; background:#071b4e; color:#ffffff; border:1px solid rgba(255,255,255,.08);">{safe_text}</div>'
+                '</div>'
+                '</div>'
+            ),
             unsafe_allow_html=True
         )
 

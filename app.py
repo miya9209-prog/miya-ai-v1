@@ -337,72 +337,78 @@ footer {visibility:hidden;}
 
 :root{
   --miya-accent:#0f6a63;
-  --miya-bot-bg:#0d1831;
-  --miya-user-bg:#e7f5f3;
-  --miya-user-text:#12312d;
+  --miya-title:#303443;
+  --miya-sub:#5b6170;
+  --miya-muted:#737987;
+  --miya-divider:#cfcfd4;
+  --miya-bot-bg:#071b4e;
+  --miya-user-bg:#dff0ec;
+  --miya-user-text:#1f3b36;
 }
 
 .block-container{
-  max-width: 760px;
-  padding-top: 0.22rem !important;
-  padding-bottom: 11.2rem !important;
+  max-width:760px;
+  padding-top:0.22rem !important;
+  padding-bottom:11.2rem !important;
 }
 
+/* 제목 */
 .miya-top{
   text-align:center;
-  margin: 0 0 8px 0;
+  margin:0 0 8px 0;
 }
 
 .miya-title{
-  font-size: 31px;
-  font-weight: 800;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
-  margin: 0;
-  color: rgba(255,255,255,0.92);
+  font-size:31px;
+  font-weight:800;
+  line-height:1.1;
+  letter-spacing:-0.02em;
+  margin:0;
+  color:var(--miya-title);
 }
 
 .miya-title-accent{
-  color: var(--miya-accent);
+  color:var(--miya-accent);
 }
 
 .miya-sub-visible{
   display:block !important;
-  margin-top: 6px;
-  font-size: 11.5px;
-  line-height: 1.35;
-  color: rgba(255,255,255,.72);
+  margin-top:6px;
+  font-size:11.5px;
+  line-height:1.35;
+  color:var(--miya-sub) !important;
   text-align:center;
-  white-space: normal;
+  white-space:normal;
 }
 
+/* 사이즈 영역 */
 .miya-profile-wrap{
-  margin-top: 2px;
-  margin-bottom: 4px;
+  margin-top:2px;
+  margin-bottom:4px;
 }
 
 .miya-profile-label-visible{
   display:block !important;
-  font-size: 13px;
-  font-weight: 700;
-  margin-bottom: 4px;
-  color: rgba(255,255,255,.92);
-  line-height: 1.2;
+  font-size:13px;
+  font-weight:700;
+  margin-bottom:4px;
+  color:var(--miya-title) !important;
+  line-height:1.2;
 }
 
 .miya-profile-help-visible{
   display:inline !important;
-  font-size: 11px;
-  font-weight: 500;
-  color: rgba(255,255,255,.62);
-  margin-left: 0;
+  font-size:11px;
+  font-weight:500;
+  color:var(--miya-muted) !important;
+  margin-left:0;
 }
 
 .miya-profile-box{
-  padding: 6px 8px 0 8px;
-  border: 1px solid rgba(255,255,255,.09);
-  border-radius: 14px;
-  background: rgba(255,255,255,.02);
+  padding:6px 8px 0 8px;
+  border:1px solid rgba(0,0,0,.04);
+  border-radius:14px;
+  background:transparent;
 }
 
 div[data-testid="column"]{
@@ -411,33 +417,37 @@ div[data-testid="column"]{
 
 div[data-testid="stTextInput"],
 div[data-testid="stSelectbox"]{
-  margin-bottom: -2px !important;
+  margin-bottom:-2px !important;
 }
 
 div[data-testid="stTextInput"] label,
 div[data-testid="stSelectbox"] label{
-  font-size: 11.5px !important;
-  font-weight: 700 !important;
-  margin-bottom: 0 !important;
+  font-size:11.5px !important;
+  font-weight:700 !important;
+  color:var(--miya-title) !important;
+  margin-bottom:0 !important;
 }
 
 div[data-testid="stTextInput"] input,
 div[data-baseweb="select"] > div{
-  border-radius: 12px !important;
+  border-radius:12px !important;
 }
 
 .miya-current{
-  margin-top: 3px;
-  margin-bottom: 2px;
-  font-size: 10.8px;
-  color: rgba(255,255,255,.62);
+  margin-top:3px;
+  margin-bottom:2px;
+  font-size:10.8px;
+  color:var(--miya-muted) !important;
 }
 
+/* divider */
 hr{
-  margin-top: 8px !important;
-  margin-bottom: 8px !important;
+  margin-top:8px !important;
+  margin-bottom:8px !important;
+  border-color:var(--miya-divider) !important;
 }
 
+/* 말풍선 */
 .msg-row{
   display:flex;
   width:100%;
@@ -465,11 +475,11 @@ hr{
 }
 
 .bot-name{
-  color: rgba(255,255,255,.76);
+  color:#5c6473 !important;
 }
 
 .user-name{
-  color: rgba(15,106,99,.92);
+  color:var(--miya-accent) !important;
   text-align:right;
   margin:0 6px 5px 0;
 }
@@ -484,72 +494,73 @@ hr{
 }
 
 .msg-bubble.bot{
-  background: var(--miya-bot-bg);
-  color:#fff;
+  background:var(--miya-bot-bg);
+  color:#ffffff;
   border:1px solid rgba(255,255,255,.08);
   border-bottom-left-radius:6px;
 }
 
 .msg-bubble.user{
-  background: var(--miya-user-bg);
-  color: var(--miya-user-text);
-  border: 1px solid rgba(15,106,99,.14);
+  background:var(--miya-user-bg);
+  color:var(--miya-user-text);
+  border:1px solid rgba(15,106,99,.14);
   border-bottom-right-radius:6px;
 }
 
+/* 입력창 */
 div[data-testid="stChatInput"]{
-  position: fixed !important;
-  left: 50% !important;
-  transform: translateX(-50%) !important;
-  bottom: 68px !important;
-  width: min(720px, calc(100% - 24px)) !important;
-  z-index: 9999 !important;
+  position:fixed !important;
+  left:50% !important;
+  transform:translateX(-50%) !important;
+  bottom:68px !important;
+  width:min(720px, calc(100% - 24px)) !important;
+  z-index:9999 !important;
 }
 
+/* 모바일 */
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
-    padding-top: 0.14rem !important;
-    padding-bottom: 11.9rem !important;
+    padding-top:0.14rem !important;
+    padding-bottom:11.9rem !important;
   }
 
   .miya-top{
-    margin-bottom: 6px;
+    margin-bottom:6px;
   }
 
   .miya-title{
-    font-size: 24px;
-    line-height: 1.12;
+    font-size:24px;
+    line-height:1.12;
   }
 
   .miya-sub-visible{
     display:block !important;
-    font-size: 10px;
-    line-height: 1.3;
-    margin-top: 4px;
-    padding: 0 8px;
-    white-space: normal;
+    font-size:10px;
+    line-height:1.3;
+    margin-top:4px;
+    padding:0 8px;
   }
 
   .miya-profile-wrap{
-    margin-top: 1px;
-    margin-bottom: 3px;
+    margin-top:1px;
+    margin-bottom:3px;
   }
 
   .miya-profile-label-visible{
     display:block !important;
-    font-size: 12px;
-    margin-bottom: 3px;
+    font-size:12px;
+    margin-bottom:3px;
   }
 
   .miya-profile-help-visible{
     display:inline !important;
-    font-size: 10px;
+    font-size:10px;
   }
 
   .miya-profile-box{
-    padding: 4px 6px 0 6px;
-    border-radius: 12px;
+    padding:4px 6px 0 6px;
+    border-radius:12px;
   }
 
   div[data-testid="stHorizontalBlock"]{
@@ -563,21 +574,21 @@ div[data-testid="stChatInput"]{
 
   div[data-testid="stTextInput"],
   div[data-testid="stSelectbox"]{
-    margin-bottom: -4px !important;
+    margin-bottom:-4px !important;
   }
 
   div[data-testid="stTextInput"] label,
   div[data-testid="stSelectbox"] label{
-    font-size: 11px !important;
+    font-size:11px !important;
   }
 
   hr{
-    margin-top: 5px !important;
-    margin-bottom: 5px !important;
+    margin-top:5px !important;
+    margin-bottom:5px !important;
   }
 
   .msg-row{
-    margin: 6px 0;
+    margin:6px 0;
   }
 
   .msg-col{
@@ -601,8 +612,8 @@ div[data-testid="stChatInput"]{
   }
 
   div[data-testid="stChatInput"]{
-    bottom: 64px !important;
-    width: calc(100% - 16px) !important;
+    bottom:64px !important;
+    width:calc(100% - 16px) !important;
   }
 }
 </style>

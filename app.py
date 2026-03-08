@@ -81,6 +81,7 @@ SYSTEM_PROMPT = """
 
 GENERIC_NAMES = {"미샵", "misharp", "MISHARP", "미샵여성", "Misharp"}
 
+
 def ensure_state():
     defaults = {
         "messages": [],
@@ -94,6 +95,7 @@ def ensure_state():
         if k not in st.session_state:
             st.session_state[k] = v
 
+
 ensure_state()
 
 qp = st.query_params
@@ -106,10 +108,12 @@ if context_key != st.session_state.last_context_key:
     st.session_state.last_context_key = context_key
     st.session_state.messages = []
 
+
 def clean_text(text: str) -> str:
     if not text:
         return ""
     return re.sub(r"\s+", " ", text).strip()
+
 
 def is_generic_name(name: str) -> bool:
     if not name:
@@ -120,6 +124,7 @@ def is_generic_name(name: str) -> bool:
     if len(name) <= 2:
         return True
     return False
+
 
 def split_sections(text: str) -> dict:
     if not text:
@@ -140,9 +145,10 @@ def split_sections(text: str) -> dict:
         "summary": joined[:2500],
         "material": extract_by_keywords(["소재", "원단", "혼용", "%", "면", "폴리", "레이온", "아크릴", "울", "스판", "비스코스", "나일론"]),
         "fit": extract_by_keywords(["핏", "여유", "라인", "체형", "복부", "팔뚝", "허벅지", "힙", "루즈", "와이드", "슬림", "정핏", "세미", "커버"]),
-        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "44", "55", "66", "77", "88", "S", "M", "L", "XL", "허리", "총장", "힙", "허벅지"]),
+        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "44", "55", "55반", "66", "66반", "77", "77반", "88", "S", "M", "L", "XL", "허리", "총장", "힙", "허벅지"]),
         "shipping": extract_by_keywords(["배송", "출고", "교환", "반품", "배송비"])
     }
+
 
 def guess_category(name: str, text: str) -> str:
     corpus = f"{name} {text}"
@@ -162,6 +168,7 @@ def guess_category(name: str, text: str) -> str:
         if any(k in corpus for k in keywords):
             return cat
     return "기타"
+
 
 def fetch_product_context(url: str, passed_name: str = "") -> dict:
     if not url:
@@ -196,6 +203,7 @@ def fetch_product_context(url: str, passed_name: str = "") -> dict:
         "raw_excerpt": raw_text[:4000]
     }
 
+
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_product_context_cached(url: str, passed_name: str = "") -> dict:
     try:
@@ -214,6 +222,7 @@ def fetch_product_context_cached(url: str, passed_name: str = "") -> dict:
             "shipping": "",
             "raw_excerpt": f"[상품 정보를 가져오지 못했습니다: {e}]"
         }
+
 
 def get_fast_policy_answer(user_text: str) -> str | None:
     q = user_text.replace(" ", "").lower()
@@ -250,6 +259,7 @@ def get_fast_policy_answer(user_text: str) -> str | None:
 
     return None
 
+
 def build_body_context() -> dict:
     return {
         "height_cm": clean_text(st.session_state.body_height),
@@ -257,6 +267,7 @@ def build_body_context() -> dict:
         "top_size": clean_text(st.session_state.body_top),
         "bottom_size": clean_text(st.session_state.body_bottom),
     }
+
 
 def build_body_context_text(body_ctx: dict) -> str:
     if not any(body_ctx.values()):
@@ -267,6 +278,7 @@ def build_body_context_text(body_ctx: dict) -> str:
         f"상의: {body_ctx.get('top_size') or '-'}, "
         f"하의: {body_ctx.get('bottom_size') or '-'}"
     )
+
 
 def get_llm_answer(user_text: str, current_url: str, product_no: str, product_context: dict | None) -> str:
     body_context = build_body_context()
@@ -301,6 +313,7 @@ def get_llm_answer(user_text: str, current_url: str, product_no: str, product_co
     )
     return resp.choices[0].message.content.strip()
 
+
 def process_user_message(user_text: str, current_url: str, product_no: str, product_context: dict | None):
     st.session_state.messages.append({"role": "user", "content": user_text})
 
@@ -312,6 +325,7 @@ def process_user_message(user_text: str, current_url: str, product_no: str, prod
     answer = get_llm_answer(user_text, current_url, product_no, product_context)
     st.session_state.messages.append({"role": "assistant", "content": answer})
 
+
 product_context = fetch_product_context_cached(current_url, product_name_q) if current_url else None
 
 st.markdown("""
@@ -321,15 +335,23 @@ div[data-testid="stToolbar"] {display:none;}
 #MainMenu {visibility:hidden;}
 footer {visibility:hidden;}
 
-.block-container{
-  max-width: 760px;
-  padding-top: 0.25rem !important;
-  padding-bottom: 11.8rem !important;
+:root{
+  --miya-accent:#0f6a63;
+  --miya-bot-bg:#0d1831;
+  --miya-user-bg:#e7f5f3;
+  --miya-user-text:#12312d;
 }
 
+.block-container{
+  max-width: 760px;
+  padding-top: 0.22rem !important;
+  padding-bottom: 11.2rem !important;
+}
+
+/* 타이틀 */
 .miya-top{
   text-align:center;
-  margin: 0 0 10px 0;
+  margin: 0 0 6px 0;
 }
 .miya-title{
   font-size: 31px;
@@ -338,29 +360,34 @@ footer {visibility:hidden;}
   letter-spacing: -0.02em;
   margin: 0;
 }
+.miya-title-accent{
+  color: var(--miya-accent);
+}
 .miya-sub{
-  margin-top: 6px;
-  font-size: 12px;
-  line-height: 1.45;
+  margin-top: 4px;
+  font-size: 11.6px;
+  line-height: 1.32;
   color: rgba(255,255,255,.74);
+  white-space: nowrap;
 }
 
+/* 사이즈 입력 */
 .miya-profile-wrap{
-  margin-top: 4px;
-  margin-bottom: 8px;
+  margin-top: 2px;
+  margin-bottom: 4px;
 }
 .miya-profile-label{
   font-size: 13px;
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 .miya-profile-help{
   font-size: 11px;
   font-weight: 500;
-  color: rgba(255,255,255,.6);
+  color: rgba(255,255,255,.62);
 }
 .miya-profile-box{
-  padding: 10px 10px 2px 10px;
+  padding: 6px 8px 0 8px;
   border: 1px solid rgba(255,255,255,.09);
   border-radius: 14px;
   background: rgba(255,255,255,.02);
@@ -370,10 +397,16 @@ div[data-testid="column"]{
   min-width:0 !important;
 }
 
+div[data-testid="stTextInput"],
+div[data-testid="stSelectbox"]{
+  margin-bottom: -2px !important;
+}
+
 div[data-testid="stTextInput"] label,
 div[data-testid="stSelectbox"] label{
-  font-size: 12px !important;
+  font-size: 11.5px !important;
   font-weight: 700 !important;
+  margin-bottom: 0 !important;
 }
 
 div[data-testid="stTextInput"] input,
@@ -382,16 +415,23 @@ div[data-baseweb="select"] > div{
 }
 
 .miya-current{
-  margin-top: 6px;
-  margin-bottom: 4px;
-  font-size: 11px;
+  margin-top: 3px;
+  margin-bottom: 2px;
+  font-size: 10.8px;
   color: rgba(255,255,255,.62);
 }
 
+/* divider 압축 */
+hr{
+  margin-top: 8px !important;
+  margin-bottom: 8px !important;
+}
+
+/* 말풍선 */
 .msg-row{
   display:flex;
   width:100%;
-  margin:10px 0;
+  margin:8px 0;
 }
 .msg-row.user{
   justify-content:flex-end;
@@ -404,48 +444,53 @@ div[data-baseweb="select"] > div{
 }
 .msg-name{
   font-size:12px;
-  color: rgba(255,255,255,.68);
+  color: rgba(255,255,255,.72);
   margin:0 0 4px 4px;
+  font-weight: 700;
 }
 .msg-bubble{
   padding:12px 14px;
   border-radius:18px;
   font-size:15px;
-  line-height:1.65;
+  line-height:1.64;
   white-space:pre-wrap;
   word-break:keep-all;
 }
+
 .msg-bubble.user{
-  background:#2f3640;
-  color:#fff;
+  background: var(--miya-user-bg);
+  color: var(--miya-user-text);
+  border: 1px solid rgba(15,106,99,.14);
   border-bottom-right-radius:6px;
 }
+
 .msg-bubble.bot{
-  background:#0d1831;
+  background: var(--miya-bot-bg);
   color:#fff;
   border:1px solid rgba(255,255,255,.08);
   border-bottom-left-radius:6px;
 }
 
-/* 핵심: 메시지 입력창을 이전보다 더 아래로 */
+/* 채팅 입력창 */
 div[data-testid="stChatInput"]{
   position: fixed !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
-  bottom: 72px !important;
+  bottom: 68px !important;
   width: min(720px, calc(100% - 24px)) !important;
   z-index: 9999 !important;
 }
 
+/* 모바일 */
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
-    padding-top: 0.15rem !important;
-    padding-bottom: 12.4rem !important;
+    padding-top: 0.14rem !important;
+    padding-bottom: 11.9rem !important;
   }
 
   .miya-top{
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .miya-title{
@@ -454,20 +499,23 @@ div[data-testid="stChatInput"]{
   }
 
   .miya-sub{
-    font-size: 10.5px;
-    line-height: 1.35;
-    margin-top: 5px;
-    padding: 0 6px;
+    font-size: 10px;
+    line-height: 1.28;
+    margin-top: 3px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
   }
 
   .miya-profile-wrap{
-    margin-top: 2px;
-    margin-bottom: 6px;
+    margin-top: 1px;
+    margin-bottom: 2px;
   }
 
   .miya-profile-label{
     font-size: 12px;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
   }
 
   .miya-profile-help{
@@ -475,17 +523,36 @@ div[data-testid="stChatInput"]{
   }
 
   .miya-profile-box{
-    padding: 8px 8px 0 8px;
+    padding: 4px 6px 0 6px;
     border-radius: 12px;
   }
 
   div[data-testid="stHorizontalBlock"]{
-    gap:8px !important;
+    gap:6px !important;
   }
 
   div[data-testid="stHorizontalBlock"] > div{
     flex:1 1 0 !important;
     min-width:0 !important;
+  }
+
+  div[data-testid="stTextInput"],
+  div[data-testid="stSelectbox"]{
+    margin-bottom: -4px !important;
+  }
+
+  div[data-testid="stTextInput"] label,
+  div[data-testid="stSelectbox"] label{
+    font-size: 11px !important;
+  }
+
+  hr{
+    margin-top: 5px !important;
+    margin-bottom: 5px !important;
+  }
+
+  .msg-row{
+    margin: 6px 0;
   }
 
   .msg-col{
@@ -494,15 +561,15 @@ div[data-testid="stChatInput"]{
 
   .msg-name{
     font-size:11px;
+    margin:0 0 3px 4px;
   }
 
   .msg-bubble{
     font-size:14px;
-    line-height:1.58;
+    line-height:1.56;
     padding:11px 13px;
   }
 
-  /* 모바일 핵심값 */
   div[data-testid="stChatInput"]{
     bottom: 64px !important;
     width: calc(100% - 16px) !important;
@@ -514,8 +581,8 @@ div[data-testid="stChatInput"]{
 st.markdown(
     """
     <div class="miya-top">
-      <div class="miya-title">미샵 쇼핑친구 미야언니</div>
-      <div class="miya-sub">24시간 언제나 미샵님들의 쇼핑 판단에 도움을 드리는 똑똑한 쇼핑친구</div>
+      <div class="miya-title">미샵 쇼핑친구 <span class="miya-title-accent">"미야언니"</span></div>
+      <div class="miya-sub">24시간 언제나 미샵님들 쇼핑 판단에 도움드리는 스마트한 쇼핑친구</div>
     </div>
     """,
     unsafe_allow_html=True
@@ -525,7 +592,7 @@ st.markdown(
     """
     <div class="miya-profile-wrap">
       <div class="miya-profile-label">
-        사이즈 입력 <span class="miya-profile-help">(더 구체적인 상담 가능)</span>
+        사이즈 입력<span class="miya-profile-help">(더 구체적인 상담 가능)</span>
       </div>
       <div class="miya-profile-box">
     """,
@@ -548,7 +615,7 @@ with row1[1]:
         key="body_weight_input"
     )
 
-size_options = ["", "44", "55", "66", "77", "88"]
+size_options = ["", "44", "55", "55반", "66", "66반", "77", "77반", "88"]
 
 row2 = st.columns(2, gap="small")
 with row2[0]:
@@ -591,9 +658,10 @@ st.divider()
 
 for msg in st.session_state.messages:
     safe_text = html.escape(msg["content"]).replace("\n", "<br>")
+
     if msg["role"] == "user":
         st.markdown(
-            f'<div class="msg-row user"><div class="msg-col"><div class="msg-bubble user">{safe_text}</div></div></div>',
+            f'<div class="msg-row user"><div class="msg-col"><div class="msg-name">고객님</div><div class="msg-bubble user">{safe_text}</div></div></div>',
             unsafe_allow_html=True
         )
     else:

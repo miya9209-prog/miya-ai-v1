@@ -119,9 +119,7 @@ def is_generic_name(name: str) -> bool:
     if not name:
         return True
     name = clean_text(name)
-    if name in GENERIC_NAMES or len(name) <= 2:
-        return True
-    return False
+    return name in GENERIC_NAMES or len(name) <= 2
 
 
 def split_sections(text: str) -> dict:
@@ -143,7 +141,7 @@ def split_sections(text: str) -> dict:
         "summary": joined[:2500],
         "material": extract_by_keywords(["소재", "원단", "혼용", "%", "면", "폴리", "레이온", "아크릴", "울", "스판", "비스코스", "나일론"]),
         "fit": extract_by_keywords(["핏", "여유", "라인", "체형", "복부", "팔뚝", "허벅지", "힙", "루즈", "와이드", "슬림", "정핏", "세미", "커버"]),
-        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "44", "55", "55반", "66", "66반", "77", "77반", "88", "S", "M", "L", "XL", "허리", "총장", "힙", "허벅지"]),
+        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "44", "55", "55반", "66", "66반", "77", "77반", "88", "S", "M", "L", "XL"]),
         "shipping": extract_by_keywords(["배송", "출고", "교환", "반품", "배송비"])
     }
 
@@ -336,7 +334,7 @@ footer {visibility:hidden;}
 .block-container{
   max-width:760px;
   padding-top:0.22rem !important;
-  padding-bottom:11.2rem !important;
+  padding-bottom:11.0rem !important;
 }
 
 :root{
@@ -372,8 +370,8 @@ div[data-testid="stSelectbox"]{
 }
 
 hr{
-  margin-top:8px !important;
-  margin-bottom:8px !important;
+  margin-top:6px !important;
+  margin-bottom:6px !important;
   border-color:var(--miya-divider) !important;
 }
 
@@ -390,7 +388,7 @@ div[data-testid="stChatInput"]{
   .block-container{
     max-width:100%;
     padding-top:0.14rem !important;
-    padding-bottom:11.9rem !important;
+    padding-bottom:11.6rem !important;
   }
 
   div[data-testid="stHorizontalBlock"]{
@@ -413,8 +411,8 @@ div[data-testid="stChatInput"]{
   }
 
   hr{
-    margin-top:5px !important;
-    margin-bottom:5px !important;
+    margin-top:4px !important;
+    margin-bottom:4px !important;
   }
 
   div[data-testid="stChatInput"]{
@@ -425,7 +423,6 @@ div[data-testid="stChatInput"]{
 </style>
 """, unsafe_allow_html=True)
 
-# 타이틀 하단 카피 글자크기 + 줄간격 확대 반영
 st.markdown(
     """
     <div style="text-align:center; margin:0 0 16px 0;">
@@ -433,7 +430,7 @@ st.markdown(
         미샵 쇼핑친구 <span style="color:#0f6a63;">미야언니</span>
       </div>
       <div style="margin-top:6px; font-size:13.5px; line-height:1.35; color:#5f6471;">
-        24시간 언제나 쇼핑 판단에 도움드리는 스마트한 쇼핑친구
+        24시간 언제나 미샵님들 쇼핑 판단에 도움드리는 스마트한 쇼핑친구
       </div>
     </div>
     """,
@@ -492,7 +489,7 @@ st.markdown("</div></div>", unsafe_allow_html=True)
 body_summary = build_body_context_text(build_body_context())
 if any(build_body_context().values()):
     st.markdown(
-        f'<div style="margin-top:3px; margin-bottom:2px; font-size:10.8px; color:#7a7f8c;">현재 입력 정보: {html.escape(body_summary)}</div>',
+        f'<div style="margin-top:2px; margin-bottom:2px; font-size:10.8px; color:#7a7f8c;">현재 입력 정보: {html.escape(body_summary)}</div>',
         unsafe_allow_html=True
     )
 
@@ -500,9 +497,9 @@ if not st.session_state.messages:
     st.session_state.messages.append({
         "role": "assistant",
         "content": (
-"안녕하세요? 옷 같이 봐드리는 미야언니예요 :) \n"
-"'지금 보시는 상품' 기준으로 제가 같이 봐드릴게요. \n"
-"사이즈, 코디, 배송, 교환 중 뭐부터 이야기해볼까요?"
+            "안녕하세요? 옷 같이 봐드리는 미야언니예요 :) \n"
+            "'지금 보시는 상품' 기준으로 제가 같이 봐드릴게요. \n"
+            "사이즈, 코디, 배송, 교환 중 뭐부터 이야기해볼까요?"
         )
     })
 
@@ -514,12 +511,12 @@ for msg in st.session_state.messages:
     if msg["role"] == "user":
         st.markdown(
             f"""
-            <div style="display:flex; justify-content:flex-end; width:100%; margin:8px 0;">
+            <div style="display:flex; justify-content:flex-end; width:100%; margin:4px 0 6px 0;">
               <div style="max-width:92%;">
-                <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#0f6a63; text-align:right; margin:0 6px 5px 0;">
+                <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#0f6a63; text-align:right; margin:0 6px 2px 0;">
                   고객님
                 </div>
-                <div style="padding:12px 16px 12px 12px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.62; white-space:pre-wrap; word-break:keep-all; background:#dff0ec; color:#1f3b36; border:1px solid rgba(15,106,99,.14);">
+                <div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.55; white-space:pre-wrap; word-break:keep-all; background:#dff0ec; color:#1f3b36; border:1px solid rgba(15,106,99,.14);">
                   {safe_text}
                 </div>
               </div>
@@ -530,12 +527,12 @@ for msg in st.session_state.messages:
     else:
         st.markdown(
             f"""
-            <div style="display:flex; justify-content:flex-start; width:100%; margin:8px 0;">
+            <div style="display:flex; justify-content:flex-start; width:100%; margin:4px 0 6px 0;">
               <div style="max-width:92%;">
-                <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#5f6471; margin:0 0 5px 6px;">
+                <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#5f6471; margin:0 0 2px 6px;">
                   미야언니
                 </div>
-                <div style="padding:12px 16px 12px 12px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.55; white-space:pre-wrap; word-break:keep-all; background:#071b4e; color:#ffffff; border:1px solid rgba(255,255,255,.08);">
+                <div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.55; white-space:pre-wrap; word-break:keep-all; background:#071b4e; color:#ffffff; border:1px solid rgba(255,255,255,.08);">
                   {safe_text}
                 </div>
               </div>

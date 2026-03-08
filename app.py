@@ -81,7 +81,6 @@ SYSTEM_PROMPT = """
 
 GENERIC_NAMES = {"미샵", "misharp", "MISHARP", "미샵여성", "Misharp"}
 
-
 def ensure_state():
     defaults = {
         "messages": [],
@@ -95,7 +94,6 @@ def ensure_state():
         if k not in st.session_state:
             st.session_state[k] = v
 
-
 ensure_state()
 
 qp = st.query_params
@@ -108,12 +106,10 @@ if context_key != st.session_state.last_context_key:
     st.session_state.last_context_key = context_key
     st.session_state.messages = []
 
-
 def clean_text(text: str) -> str:
     if not text:
         return ""
     return re.sub(r"\s+", " ", text).strip()
-
 
 def is_generic_name(name: str) -> bool:
     if not name:
@@ -124,7 +120,6 @@ def is_generic_name(name: str) -> bool:
     if len(name) <= 2:
         return True
     return False
-
 
 def split_sections(text: str) -> dict:
     if not text:
@@ -149,7 +144,6 @@ def split_sections(text: str) -> dict:
         "shipping": extract_by_keywords(["배송", "출고", "교환", "반품", "배송비"])
     }
 
-
 def guess_category(name: str, text: str) -> str:
     corpus = f"{name} {text}"
     mapping = {
@@ -168,7 +162,6 @@ def guess_category(name: str, text: str) -> str:
         if any(k in corpus for k in keywords):
             return cat
     return "기타"
-
 
 def fetch_product_context(url: str, passed_name: str = "") -> dict:
     if not url:
@@ -203,7 +196,6 @@ def fetch_product_context(url: str, passed_name: str = "") -> dict:
         "raw_excerpt": raw_text[:4000]
     }
 
-
 @st.cache_data(ttl=300, show_spinner=False)
 def fetch_product_context_cached(url: str, passed_name: str = "") -> dict:
     try:
@@ -222,7 +214,6 @@ def fetch_product_context_cached(url: str, passed_name: str = "") -> dict:
             "shipping": "",
             "raw_excerpt": f"[상품 정보를 가져오지 못했습니다: {e}]"
         }
-
 
 def get_fast_policy_answer(user_text: str) -> str | None:
     q = user_text.replace(" ", "").lower()
@@ -259,7 +250,6 @@ def get_fast_policy_answer(user_text: str) -> str | None:
 
     return None
 
-
 def build_body_context() -> dict:
     return {
         "height_cm": clean_text(st.session_state.body_height),
@@ -267,7 +257,6 @@ def build_body_context() -> dict:
         "top_size": clean_text(st.session_state.body_top),
         "bottom_size": clean_text(st.session_state.body_bottom),
     }
-
 
 def build_body_context_text(body_ctx: dict) -> str:
     if not any(body_ctx.values()):
@@ -278,7 +267,6 @@ def build_body_context_text(body_ctx: dict) -> str:
         f"상의: {body_ctx.get('top_size') or '-'}, "
         f"하의: {body_ctx.get('bottom_size') or '-'}"
     )
-
 
 def get_llm_answer(user_text: str, current_url: str, product_no: str, product_context: dict | None) -> str:
     body_context = build_body_context()
@@ -313,7 +301,6 @@ def get_llm_answer(user_text: str, current_url: str, product_no: str, product_co
     )
     return resp.choices[0].message.content.strip()
 
-
 def process_user_message(user_text: str, current_url: str, product_no: str, product_context: dict | None):
     st.session_state.messages.append({"role": "user", "content": user_text})
 
@@ -324,7 +311,6 @@ def process_user_message(user_text: str, current_url: str, product_no: str, prod
 
     answer = get_llm_answer(user_text, current_url, product_no, product_context)
     st.session_state.messages.append({"role": "assistant", "content": answer})
-
 
 product_context = fetch_product_context_cached(current_url, product_name_q) if current_url else None
 
@@ -348,7 +334,6 @@ footer {visibility:hidden;}
   padding-bottom: 11.2rem !important;
 }
 
-/* 타이틀 */
 .miya-top{
   text-align:center;
   margin: 0 0 6px 0;
@@ -364,27 +349,29 @@ footer {visibility:hidden;}
   color: var(--miya-accent);
 }
 .miya-sub{
+  display:block !important;
   margin-top: 4px;
   font-size: 11.6px;
   line-height: 1.32;
   color: rgba(255,255,255,.74);
-  white-space: nowrap;
 }
 
-/* 사이즈 입력 */
 .miya-profile-wrap{
   margin-top: 2px;
   margin-bottom: 4px;
 }
 .miya-profile-label{
+  display:block !important;
   font-size: 13px;
   font-weight: 700;
   margin-bottom: 4px;
 }
 .miya-profile-help{
+  display:inline !important;
   font-size: 11px;
   font-weight: 500;
   color: rgba(255,255,255,.62);
+  margin-left: 0;
 }
 .miya-profile-box{
   padding: 6px 8px 0 8px;
@@ -421,13 +408,11 @@ div[data-baseweb="select"] > div{
   color: rgba(255,255,255,.62);
 }
 
-/* divider 압축 */
 hr{
   margin-top: 8px !important;
   margin-bottom: 8px !important;
 }
 
-/* 말풍선 */
 .msg-row{
   display:flex;
   width:100%;
@@ -443,10 +428,12 @@ hr{
   max-width:82%;
 }
 .msg-name{
+  display:block !important;
   font-size:12px;
   color: rgba(255,255,255,.72);
-  margin:0 0 4px 4px;
+  margin:0 0 4px 6px;
   font-weight: 700;
+  line-height: 1.2;
 }
 .msg-bubble{
   padding:12px 14px;
@@ -456,14 +443,12 @@ hr{
   white-space:pre-wrap;
   word-break:keep-all;
 }
-
 .msg-bubble.user{
   background: var(--miya-user-bg);
   color: var(--miya-user-text);
   border: 1px solid rgba(15,106,99,.14);
   border-bottom-right-radius:6px;
 }
-
 .msg-bubble.bot{
   background: var(--miya-bot-bg);
   color:#fff;
@@ -471,7 +456,6 @@ hr{
   border-bottom-left-radius:6px;
 }
 
-/* 채팅 입력창 */
 div[data-testid="stChatInput"]{
   position: fixed !important;
   left: 50% !important;
@@ -481,7 +465,6 @@ div[data-testid="stChatInput"]{
   z-index: 9999 !important;
 }
 
-/* 모바일 */
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
@@ -499,13 +482,12 @@ div[data-testid="stChatInput"]{
   }
 
   .miya-sub{
+    display:block !important;
     font-size: 10px;
     line-height: 1.28;
     margin-top: 3px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
     padding: 0 4px;
+    white-space: normal;
   }
 
   .miya-profile-wrap{
@@ -514,11 +496,14 @@ div[data-testid="stChatInput"]{
   }
 
   .miya-profile-label{
+    display:block !important;
     font-size: 12px;
     margin-bottom: 2px;
+    line-height: 1.2;
   }
 
   .miya-profile-help{
+    display:inline !important;
     font-size: 10px;
   }
 
@@ -560,8 +545,9 @@ div[data-testid="stChatInput"]{
   }
 
   .msg-name{
+    display:block !important;
     font-size:11px;
-    margin:0 0 3px 4px;
+    margin:0 0 3px 6px;
   }
 
   .msg-bubble{
@@ -581,7 +567,7 @@ div[data-testid="stChatInput"]{
 st.markdown(
     """
     <div class="miya-top">
-      <div class="miya-title">미샵 쇼핑친구 <span class="miya-title-accent">"미야언니"</span></div>
+      <div class="miya-title">미샵 쇼핑친구 <span class="miya-title-accent">미야언니</span></div>
       <div class="miya-sub">24시간 언제나 미샵님들 쇼핑 판단에 도움드리는 스마트한 쇼핑친구</div>
     </div>
     """,
@@ -591,9 +577,7 @@ st.markdown(
 st.markdown(
     """
     <div class="miya-profile-wrap">
-      <div class="miya-profile-label">
-        사이즈 입력<span class="miya-profile-help">(더 구체적인 상담 가능)</span>
-      </div>
+      <div class="miya-profile-label">사이즈 입력<span class="miya-profile-help">(더 구체적인 상담 가능)</span></div>
       <div class="miya-profile-box">
     """,
     unsafe_allow_html=True
@@ -658,15 +642,28 @@ st.divider()
 
 for msg in st.session_state.messages:
     safe_text = html.escape(msg["content"]).replace("\n", "<br>")
-
     if msg["role"] == "user":
         st.markdown(
-            f'<div class="msg-row user"><div class="msg-col"><div class="msg-name">고객님</div><div class="msg-bubble user">{safe_text}</div></div></div>',
+            f'''
+            <div class="msg-row user">
+              <div class="msg-col">
+                <div class="msg-name">고객님</div>
+                <div class="msg-bubble user">{safe_text}</div>
+              </div>
+            </div>
+            ''',
             unsafe_allow_html=True
         )
     else:
         st.markdown(
-            f'<div class="msg-row bot"><div class="msg-col"><div class="msg-name">미야언니</div><div class="msg-bubble bot">{safe_text}</div></div></div>',
+            f'''
+            <div class="msg-row bot">
+              <div class="msg-col">
+                <div class="msg-name">미야언니</div>
+                <div class="msg-bubble bot">{safe_text}</div>
+              </div>
+            </div>
+            ''',
             unsafe_allow_html=True
         )
 

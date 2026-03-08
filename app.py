@@ -519,7 +519,7 @@ for msg in st.session_state.messages:
                 <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#0f6a63; text-align:right; margin:0 6px 5px 0;">
                   고객님
                 </div>
-                <div style="padding:12px 14px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.62; white-space:pre-wrap; word-break:keep-all; background:#dff0ec; color:#1f3b36; border:1px solid rgba(15,106,99,.14);">
+                <div style="padding:12px 14px 12px 10px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.62; white-space:pre-wrap; word-break:keep-all; background:#dff0ec; color:#1f3b36; border:1px solid rgba(15,106,99,.14);">
                   {safe_text}
                 </div>
               </div>
@@ -535,7 +535,7 @@ for msg in st.session_state.messages:
                 <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#5f6471; margin:0 0 5px 6px;">
                   미야언니
                 </div>
-                <div style="padding:12px 14px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.55; white-space:pre-wrap; word-break:keep-all; background:#071b4e; color:#ffffff; border:1px solid rgba(255,255,255,.08);">
+                <div style="padding:12px 14px 12px 10px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.55; white-space:pre-wrap; word-break:keep-all; background:#071b4e; color:#ffffff; border:1px solid rgba(255,255,255,.08);">
                   {safe_text}
                 </div>
               </div>

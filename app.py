@@ -53,30 +53,29 @@ SYSTEM_PROMPT = """
 
 말투 규칙:
 - 친근한 대화체
-- "근거로", "첫째", "둘째", "정리하면" 같은 로봇 같은 표현은 되도록 쓰지 않는다
-- 자연스럽게 설명하고, 말마다 패턴이 똑같지 않게 조금씩 다르게 말한다
+- "근거로", "첫째", "둘째", "정리하면" 같은 표현은 되도록 쓰지 않는다
+- 자연스럽게 설명하고, 답변 패턴이 매번 똑같지 않게 조금씩 다르게 말한다
 - "지금 보시는 상품"이라는 표현을 자연스럽게 사용한다
 - 상품명이 확실할 때만 상품명을 쓴다
-- 상품명이 불확실하거나 일반명으로 보이면 상품명 대신 "지금 보시는 상품"이라고 말한다
+- 상품명이 불확실하면 "지금 보시는 상품"이라고 말한다
 - 고객 체형 정보가 있으면 꼭 참고해서 말한다
-- 정보가 부족하면 단정하지 말고, 필요한 부분만 짧게 다시 물어본다
+- 정보가 부족하면 짧게 필요한 부분만 다시 물어본다
 
 답변 스타일:
 - 3~7문장 내외
-- 먼저 바로 질문에 답하고
+- 먼저 질문에 바로 답하고
 - 이어서 이유를 자연스럽게 풀어주고
-- 마지막에는 필요할 때만 짧은 추가 질문을 붙인다
+- 마지막에는 필요할 때만 짧게 추가 질문을 붙인다
 
 배송/교환 규칙:
 - 정책 관련 답변은 반드시 POLICY_DB 기준으로만 말한다
 
 사이즈 상담 규칙:
 - 고객 키/체중/상의/하의 정보가 있으면 꼭 반영한다
-- 확신이 부족하면 "딱 맞다" 식으로 단정하지 말고
-  "이 체형이면 이렇게 입는 느낌일 것 같다"는 식으로 안전하게 말한다
+- 확신이 부족하면 단정적으로 말하지 말고 안전하게 추천한다
 
 코디 상담 규칙:
-- 과장하지 말고 실제로 입기 쉬운 조합 위주로 말한다
+- 실제로 입기 쉬운 조합 위주로 말한다
 - 학모룩, 출근룩, 모임룩 같은 상황 질문에는 분위기와 활용도를 자연스럽게 설명한다
 """
 
@@ -96,9 +95,6 @@ def ensure_state():
             st.session_state[k] = v
 
 ensure_state()
-
-def reset_all():
-    st.session_state.messages = []
 
 qp = st.query_params
 current_url = qp.get("url", "") or ""
@@ -320,171 +316,203 @@ product_context = fetch_product_context_cached(current_url, product_name_q) if c
 
 st.markdown("""
 <style>
-.block-container {
-  padding-top: calc(1.05rem + env(safe-area-inset-top));
-  padding-bottom: 8.2rem;
+:root{
+  --chat-input-bottom-desktop: 18px;
+  --chat-input-bottom-mobile: 92px;
+}
+
+/* 전체 컨테이너 */
+.block-container{
+  padding-top: calc(0.35rem + env(safe-area-inset-top));
+  padding-bottom: 11.2rem;
   max-width: 760px;
 }
 
-header[data-testid="stHeader"] {
+/* 기본 헤더/툴바 숨김 */
+header[data-testid="stHeader"]{
   height: 0px;
 }
-div[data-testid="stToolbar"] {
+div[data-testid="stToolbar"]{
   visibility: hidden;
   height: 0px;
 }
 
-.main-title-wrap {
-  margin-top: -4px;
+/* 상단 타이틀 */
+.main-title-wrap{
+  margin-top: -14px;
   margin-bottom: 6px;
   text-align: center;
 }
-.main-title {
-  font-size: 47px;
+.main-title{
+  font-size: 48px;
   font-weight: 800;
-  line-height: 1.08;
+  line-height: 1.04;
   margin: 0;
   letter-spacing: -0.02em;
   white-space: nowrap;
 }
-.main-subtitle {
-  margin-top: 8px;
-  margin-bottom: 8px;
+.main-subtitle{
+  margin-top: 6px;
+  margin-bottom: 10px;
   color: rgba(255,255,255,0.74);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.4;
 }
 
-.profile-wrap {
-  margin-top: 6px;
-  margin-bottom: 8px;
+/* 상단 입력 UI */
+.profile-wrap{
+  margin-top: 4px;
+  margin-bottom: 4px;
 }
-.profile-label {
+.profile-label{
   font-size: 13px;
   font-weight: 700;
   margin: 0 0 8px 0;
   color: rgba(255,255,255,0.92);
 }
-.profile-help {
+.profile-help{
   font-size: 11px;
   color: rgba(255,255,255,0.58);
   margin-left: 4px;
   font-weight: 500;
 }
-
-.profile-box {
-  padding: 12px 12px 4px 12px;
+.profile-box{
+  padding: 10px 10px 0 10px;
   border: 1px solid rgba(255,255,255,0.09);
   border-radius: 14px;
   background: rgba(255,255,255,0.02);
+  margin-bottom: 2px;
 }
-
-.profile-caption {
-  font-size: 11px;
-  color: rgba(255,255,255,0.56);
-  margin-top: 6px;
-  margin-bottom: 0;
-}
-
 div[data-testid="stTextInput"] label,
-div[data-testid="stSelectbox"] label {
+div[data-testid="stSelectbox"] label{
   font-size: 12px !important;
 }
 
-.msg-row {
+/* 채팅 말풍선 */
+.msg-row{
   display: flex;
   width: 100%;
-  margin: 12px 0;
+  margin: 10px 0;
 }
-.msg-row.user {
+.msg-row.user{
   justify-content: flex-end;
 }
-.msg-row.bot {
+.msg-row.bot{
   justify-content: flex-start;
 }
-.msg-col {
-  max-width: 80%;
+.msg-col{
+  max-width: 82%;
 }
-.msg-name {
+.msg-name{
   font-size: 12px;
   opacity: .72;
   margin: 0 0 4px 4px;
 }
-.msg-bubble {
+.msg-bubble{
   padding: 12px 14px;
   border-radius: 18px;
   font-size: 15px;
-  line-height: 1.68;
+  line-height: 1.66;
   white-space: pre-wrap;
   word-break: keep-all;
 }
-.msg-bubble.user {
+.msg-bubble.user{
   background: #2f3640;
   color: #fff;
   border-bottom-right-radius: 6px;
 }
-.msg-bubble.bot {
+.msg-bubble.bot{
   background: #111827;
   color: #fff;
   border: 1px solid rgba(255,255,255,0.08);
   border-bottom-left-radius: 6px;
 }
 
-div[data-testid="stChatInput"] {
+/* 채팅 입력창 */
+div[data-testid="stChatInput"]{
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 42px;
+  bottom: var(--chat-input-bottom-desktop);
   width: min(720px, calc(100% - 20px));
   z-index: 9999;
+  background: transparent;
 }
 
-@media (max-width: 768px) {
-  .block-container {
-    padding-top: calc(0.35rem + env(safe-area-inset-top));
-    padding-bottom: 8.6rem;
+/* 하단 닫기 버튼 영역과 겹치지 않게 */
+section.main > div.block-container{
+  margin-bottom: 0;
+}
+
+/* 모바일 */
+@media (max-width: 768px){
+  .block-container{
+    padding-top: calc(0.05rem + env(safe-area-inset-top));
+    padding-bottom: 12.6rem;
+    max-width: 100%;
   }
 
-  .main-title-wrap {
-    margin-top: -8px;
-    margin-bottom: 4px;
+  .main-title-wrap{
+    margin-top: -18px;
+    margin-bottom: 2px;
   }
 
-  .main-title {
-    font-size: 29px;
-    line-height: 1.06;
-    white-space: nowrap;
+  .main-title{
+    font-size: 28px;
+    line-height: 1.04;
+    letter-spacing: -0.02em;
   }
 
-  .main-subtitle {
-    font-size: 11.5px;
-    line-height: 1.38;
-    margin-top: 6px;
-    margin-bottom: 8px;
-  }
-
-  .profile-wrap {
+  .main-subtitle{
+    font-size: 11px;
+    line-height: 1.32;
     margin-top: 4px;
-    margin-bottom: 4px;
+    margin-bottom: 8px;
+    padding: 0 4px;
   }
 
-  .profile-box {
-    padding: 10px 10px 2px 10px;
+  .profile-wrap{
+    margin-top: 2px;
+    margin-bottom: 2px;
+  }
+
+  .profile-label{
+    font-size: 12px;
+    margin-bottom: 6px;
+  }
+
+  .profile-help{
+    font-size: 10px;
+  }
+
+  .profile-box{
+    padding: 8px 8px 0 8px;
     border-radius: 12px;
   }
 
-  .msg-col {
-    max-width: 84%;
+  .msg-col{
+    max-width: 86%;
   }
 
-  .msg-bubble {
+  .msg-name{
+    font-size: 11px;
+  }
+
+  .msg-bubble{
     font-size: 14px;
-    line-height: 1.62;
+    line-height: 1.58;
+    padding: 11px 13px;
   }
 
-  div[data-testid="stChatInput"] {
-    bottom: 26px;
+  /* 모바일 입력창: 깃허브 심볼 바로 위에 걸치도록 */
+  div[data-testid="stChatInput"]{
+    bottom: var(--chat-input-bottom-mobile);
     width: calc(100% - 16px);
+  }
+
+  /* 모바일에서 입력 컴포넌트 자체 높이 조금 축소 */
+  div[data-testid="stTextInput"] input{
+    min-height: 42px;
   }
 }
 </style>
@@ -511,9 +539,14 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-c1, c2, c3, c4 = st.columns(4)
+# 데스크톱: 4칸
+desktop_cols = st.columns(4)
+# 모바일에서는 Streamlit이 종종 세로로 무너져서 2줄 2칸 구조를 따로 사용
+# 가장 안정적으로 보이게 하려고 실제 렌더는 2줄 2칸으로 통일
+row1 = st.columns(2)
+row2 = st.columns(2)
 
-with c1:
+with row1[0]:
     st.session_state.body_height = st.text_input(
         "키",
         value=st.session_state.body_height,
@@ -521,7 +554,7 @@ with c1:
         key="body_height_input"
     )
 
-with c2:
+with row1[1]:
     st.session_state.body_weight = st.text_input(
         "체중",
         value=st.session_state.body_weight,
@@ -531,7 +564,7 @@ with c2:
 
 size_options = ["", "44", "55", "66", "77", "88"]
 
-with c3:
+with row2[0]:
     current_top = st.session_state.body_top if st.session_state.body_top in size_options else ""
     st.session_state.body_top = st.selectbox(
         "상의",
@@ -540,7 +573,7 @@ with c3:
         key="body_top_input"
     )
 
-with c4:
+with row2[1]:
     current_bottom = st.session_state.body_bottom if st.session_state.body_bottom in size_options else ""
     st.session_state.body_bottom = st.selectbox(
         "하의",

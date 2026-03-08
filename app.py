@@ -531,7 +531,7 @@ for msg in st.session_state.messages:
         st.markdown(
             f"""
             <div style="display:flex; justify-content:flex-start; width:100%; margin:8px 0;">
-              <div style="max-width:82%;">
+              <div style="max-width:92%;">
                 <div style="display:block; font-size:12px; font-weight:700; line-height:1.2; color:#5f6471; margin:0 0 5px 6px;">
                   미야언니
                 </div>

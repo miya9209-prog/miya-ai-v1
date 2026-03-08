@@ -431,7 +431,7 @@ st.markdown(
       <div style="font-size:31px; font-weight:800; line-height:1.1; letter-spacing:-0.02em; color:#303443;">
         미샵 쇼핑친구 <span style="color:#0f6a63;">미야언니</span>
       </div>
-      <div style="margin-top:6px; font-size:11.5px; line-height:1.35; color:#5f6471;">
+      <div style="margin-top:6px; font-size:13.5px; line-height:1.35; color:#5f6471;">
         24시간 언제나 미샵님들 쇼핑 판단에 도움드리는 스마트한 쇼핑친구
       </div>
     </div>

@@ -316,203 +316,224 @@ product_context = fetch_product_context_cached(current_url, product_name_q) if c
 
 st.markdown("""
 <style>
-:root{
-  --chat-input-bottom-desktop: 18px;
-  --chat-input-bottom-mobile: 92px;
+/* 기본 */
+header[data-testid="stHeader"] {display:none;}
+div[data-testid="stToolbar"] {display:none;}
+#MainMenu {visibility:hidden;}
+footer {visibility:hidden;}
+
+html, body, [class*="css"] {
+  -webkit-font-smoothing: antialiased;
 }
 
-/* 전체 컨테이너 */
+/* 전체 폭/여백 */
 .block-container{
-  padding-top: calc(0.35rem + env(safe-area-inset-top));
-  padding-bottom: 11.2rem;
   max-width: 760px;
+  padding-top: 0.45rem !important;
+  padding-bottom: 13.5rem !important;
 }
 
-/* 기본 헤더/툴바 숨김 */
-header[data-testid="stHeader"]{
-  height: 0px;
+/* 제목 */
+.miya-top{
+  text-align:center;
+  margin: 0 0 10px 0;
 }
-div[data-testid="stToolbar"]{
-  visibility: hidden;
-  height: 0px;
-}
-
-/* 상단 타이틀 */
-.main-title-wrap{
-  margin-top: -14px;
-  margin-bottom: 6px;
-  text-align: center;
-}
-.main-title{
-  font-size: 48px;
+.miya-title{
+  font-size: 31px;
   font-weight: 800;
-  line-height: 1.04;
-  margin: 0;
+  line-height: 1.1;
   letter-spacing: -0.02em;
-  white-space: nowrap;
+  margin: 0;
 }
-.main-subtitle{
+.miya-sub{
   margin-top: 6px;
-  margin-bottom: 10px;
-  color: rgba(255,255,255,0.74);
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255,255,255,.74);
 }
 
-/* 상단 입력 UI */
-.profile-wrap{
+/* 프로필 입력 */
+.miya-profile-wrap{
   margin-top: 4px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
-.profile-label{
+.miya-profile-label{
   font-size: 13px;
   font-weight: 700;
-  margin: 0 0 8px 0;
-  color: rgba(255,255,255,0.92);
+  margin-bottom: 8px;
 }
-.profile-help{
+.miya-profile-help{
   font-size: 11px;
-  color: rgba(255,255,255,0.58);
-  margin-left: 4px;
   font-weight: 500;
+  color: rgba(255,255,255,.6);
 }
-.profile-box{
-  padding: 10px 10px 0 10px;
-  border: 1px solid rgba(255,255,255,0.09);
+.miya-profile-box{
+  padding: 10px 10px 2px 10px;
+  border: 1px solid rgba(255,255,255,.09);
   border-radius: 14px;
-  background: rgba(255,255,255,0.02);
-  margin-bottom: 2px;
+  background: rgba(255,255,255,.02);
 }
+
+/* 2줄 2칸 고정 */
+.miya-grid-row{
+  display:flex;
+  gap:10px;
+}
+.miya-grid-row > div{
+  flex:1 1 0;
+  min-width:0;
+}
+
+/* streamlit 컬럼 간격 강제 */
+div[data-testid="column"]{
+  min-width:0 !important;
+}
+
+/* 입력 라벨/필드 */
 div[data-testid="stTextInput"] label,
 div[data-testid="stSelectbox"] label{
   font-size: 12px !important;
+  font-weight: 700 !important;
 }
 
-/* 채팅 말풍선 */
+div[data-testid="stTextInput"] input,
+div[data-baseweb="select"] > div{
+  border-radius: 12px !important;
+}
+
+/* 현재 입력 정보 */
+.miya-current{
+  margin-top: 6px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  color: rgba(255,255,255,.62);
+}
+
+/* 메시지 */
 .msg-row{
-  display: flex;
-  width: 100%;
-  margin: 10px 0;
+  display:flex;
+  width:100%;
+  margin:10px 0;
 }
 .msg-row.user{
-  justify-content: flex-end;
+  justify-content:flex-end;
 }
 .msg-row.bot{
-  justify-content: flex-start;
+  justify-content:flex-start;
 }
 .msg-col{
-  max-width: 82%;
+  max-width:82%;
 }
 .msg-name{
-  font-size: 12px;
-  opacity: .72;
-  margin: 0 0 4px 4px;
+  font-size:12px;
+  color: rgba(255,255,255,.68);
+  margin:0 0 4px 4px;
 }
 .msg-bubble{
-  padding: 12px 14px;
-  border-radius: 18px;
-  font-size: 15px;
-  line-height: 1.66;
-  white-space: pre-wrap;
-  word-break: keep-all;
+  padding:12px 14px;
+  border-radius:18px;
+  font-size:15px;
+  line-height:1.65;
+  white-space:pre-wrap;
+  word-break:keep-all;
 }
 .msg-bubble.user{
-  background: #2f3640;
-  color: #fff;
-  border-bottom-right-radius: 6px;
+  background:#2f3640;
+  color:#fff;
+  border-bottom-right-radius:6px;
 }
 .msg-bubble.bot{
-  background: #111827;
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-bottom-left-radius: 6px;
+  background:#0d1831;
+  color:#fff;
+  border:1px solid rgba(255,255,255,.08);
+  border-bottom-left-radius:6px;
 }
 
 /* 채팅 입력창 */
 div[data-testid="stChatInput"]{
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: var(--chat-input-bottom-desktop);
-  width: min(720px, calc(100% - 20px));
-  z-index: 9999;
-  background: transparent;
-}
-
-/* 하단 닫기 버튼 영역과 겹치지 않게 */
-section.main > div.block-container{
-  margin-bottom: 0;
+  position: fixed !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
+  bottom: 110px !important;
+  width: min(720px, calc(100% - 24px)) !important;
+  z-index: 9999 !important;
 }
 
 /* 모바일 */
 @media (max-width: 768px){
   .block-container{
-    padding-top: calc(0.05rem + env(safe-area-inset-top));
-    padding-bottom: 12.6rem;
-    max-width: 100%;
+    max-width:100%;
+    padding-top: 0.2rem !important;
+    padding-bottom: 14.2rem !important;
   }
 
-  .main-title-wrap{
-    margin-top: -18px;
-    margin-bottom: 2px;
-  }
-
-  .main-title{
-    font-size: 28px;
-    line-height: 1.04;
-    letter-spacing: -0.02em;
-  }
-
-  .main-subtitle{
-    font-size: 11px;
-    line-height: 1.32;
-    margin-top: 4px;
+  .miya-top{
     margin-bottom: 8px;
-    padding: 0 4px;
   }
 
-  .profile-wrap{
+  .miya-title{
+    font-size: 24px;
+    line-height: 1.12;
+  }
+
+  .miya-sub{
+    font-size: 10.5px;
+    line-height: 1.35;
+    margin-top: 5px;
+    padding: 0 6px;
+  }
+
+  .miya-profile-wrap{
     margin-top: 2px;
-    margin-bottom: 2px;
+    margin-bottom: 6px;
   }
 
-  .profile-label{
+  .miya-profile-label{
     font-size: 12px;
     margin-bottom: 6px;
   }
 
-  .profile-help{
+  .miya-profile-help{
     font-size: 10px;
   }
 
-  .profile-box{
+  .miya-profile-box{
     padding: 8px 8px 0 8px;
     border-radius: 12px;
   }
 
+  .miya-grid-row{
+    gap:8px;
+  }
+
   .msg-col{
-    max-width: 86%;
+    max-width:86%;
   }
 
   .msg-name{
-    font-size: 11px;
+    font-size:11px;
   }
 
   .msg-bubble{
-    font-size: 14px;
-    line-height: 1.58;
-    padding: 11px 13px;
+    font-size:14px;
+    line-height:1.58;
+    padding:11px 13px;
   }
 
-  /* 모바일 입력창: 깃허브 심볼 바로 위에 걸치도록 */
+  /* 모바일에서 2칸 유지 강제 */
+  div[data-testid="stHorizontalBlock"]{
+    gap:8px !important;
+  }
+
+  div[data-testid="stHorizontalBlock"] > div{
+    flex:1 1 0 !important;
+    min-width:0 !important;
+  }
+
+  /* 메시지 입력창을 하단 배지 바로 위로 */
   div[data-testid="stChatInput"]{
-    bottom: var(--chat-input-bottom-mobile);
-    width: calc(100% - 16px);
-  }
-
-  /* 모바일에서 입력 컴포넌트 자체 높이 조금 축소 */
-  div[data-testid="stTextInput"] input{
-    min-height: 42px;
+    bottom: 120px !important;
+    width: calc(100% - 16px) !important;
   }
 }
 </style>
@@ -520,9 +541,9 @@ section.main > div.block-container{
 
 st.markdown(
     """
-    <div class="main-title-wrap">
-      <div class="main-title">미샵 쇼핑친구 미야언니</div>
-      <div class="main-subtitle">24시간 언제나 미샵님들의 쇼핑 판단에 도움을 드리는 똑똑한 쇼핑친구</div>
+    <div class="miya-top">
+      <div class="miya-title">미샵 쇼핑친구 미야언니</div>
+      <div class="miya-sub">24시간 언제나 미샵님들의 쇼핑 판단에 도움을 드리는 똑똑한 쇼핑친구</div>
     </div>
     """,
     unsafe_allow_html=True
@@ -530,22 +551,16 @@ st.markdown(
 
 st.markdown(
     """
-    <div class="profile-wrap">
-      <div class="profile-label">
-        사이즈 입력 <span class="profile-help">(더 구체적인 상담 가능)</span>
+    <div class="miya-profile-wrap">
+      <div class="miya-profile-label">
+        사이즈 입력 <span class="miya-profile-help">(더 구체적인 상담 가능)</span>
       </div>
-      <div class="profile-box">
+      <div class="miya-profile-box">
     """,
     unsafe_allow_html=True
 )
 
-# 데스크톱: 4칸
-desktop_cols = st.columns(4)
-# 모바일에서는 Streamlit이 종종 세로로 무너져서 2줄 2칸 구조를 따로 사용
-# 가장 안정적으로 보이게 하려고 실제 렌더는 2줄 2칸으로 통일
-row1 = st.columns(2)
-row2 = st.columns(2)
-
+row1 = st.columns(2, gap="small")
 with row1[0]:
     st.session_state.body_height = st.text_input(
         "키",
@@ -553,7 +568,6 @@ with row1[0]:
         placeholder="cm",
         key="body_height_input"
     )
-
 with row1[1]:
     st.session_state.body_weight = st.text_input(
         "체중",
@@ -564,6 +578,7 @@ with row1[1]:
 
 size_options = ["", "44", "55", "66", "77", "88"]
 
+row2 = st.columns(2, gap="small")
 with row2[0]:
     current_top = st.session_state.body_top if st.session_state.body_top in size_options else ""
     st.session_state.body_top = st.selectbox(
@@ -572,7 +587,6 @@ with row2[0]:
         index=size_options.index(current_top),
         key="body_top_input"
     )
-
 with row2[1]:
     current_bottom = st.session_state.body_bottom if st.session_state.body_bottom in size_options else ""
     st.session_state.body_bottom = st.selectbox(
@@ -586,7 +600,7 @@ st.markdown("</div></div>", unsafe_allow_html=True)
 
 body_summary = build_body_context_text(build_body_context())
 if any(build_body_context().values()):
-    st.caption(f"현재 입력 정보: {body_summary}")
+    st.markdown(f'<div class="miya-current">현재 입력 정보: {html.escape(body_summary)}</div>', unsafe_allow_html=True)
 
 if not st.session_state.messages:
     st.session_state.messages.append({

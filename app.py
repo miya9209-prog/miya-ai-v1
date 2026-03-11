@@ -485,7 +485,7 @@ def build_assistant_system_message(app_ctx: dict, user_input: str) -> str:
             )
     else:
         extra_rules.append(
-            "현재는 일반 상담 상태입니다. 상품별 정확한 상담은 상품 상세페이지에서 채팅 버튼을 다시 누르면 더 정확하다고 자연스럽게 안내하세요."
+            "현재는 일반 상담 상태입니다. 상품별 정확한 상담은 상품 상세페이지에서 채팅 버튼을 다시 눌러주시면 더 정확하다고 자연스럽게 안내하세요."
         )
 
     if is_coordi_request(user_input) and product_ctx:

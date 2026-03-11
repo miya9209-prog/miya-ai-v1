@@ -402,6 +402,7 @@ def get_purchase_personalization(customer: dict) -> dict:
 def build_app_context():
     product_ctx = st.session_state.product_context
     body_ctx = body_context()
+    current_page_is_product = is_product_page(current_url, product_no)
 
     size_result = None
     if product_ctx:
@@ -416,6 +417,7 @@ def build_app_context():
     return {
         "mode": st.session_state.mode,
         "current_product": product_ctx,
+        "current_page_is_product": current_page_is_product,
         "body_context": body_ctx,
         "customer_context": customer_ctx,
         "recommended_size": size_result,
@@ -455,34 +457,43 @@ def build_assistant_system_message(app_ctx: dict, user_input: str) -> str:
     product_ctx = app_ctx.get("current_product")
     size_result = app_ctx.get("recommended_size")
     purchase_personalization = app_ctx.get("purchase_personalization", {})
+    current_page_is_product = app_ctx.get("current_page_is_product", False)
 
     extra_rules = [
-        "답변은 보통 3~4문장 정도로 핵심만 말하세요.",
+        "답변은 지금보다 약간 짧게, 보통 3~4문장 정도로 핵심만 말하세요.",
         "두루뭉술한 설명보다 결론을 먼저 말하고 바로 도움이 되는 설명만 덧붙이세요.",
-        "같은 말을 반복하지 마세요.",
+        "문장은 짧고 자연스럽게 쓰고, 같은 말을 반복하지 마세요.",
     ]
 
-    if product_ctx:
-        product_name = product_ctx.get("product_name", "지금 보시는 상품")
-        color_options = product_ctx.get("color_options", [])
-        size_options = product_ctx.get("size_options", [])
+    if current_page_is_product:
+        if product_ctx:
+            product_name = product_ctx.get("product_name", "지금 보시는 상품")
+            color_options = product_ctx.get("color_options", [])
+            size_options = product_ctx.get("size_options", [])
 
-        extra_rules.append(f"현재 상담 상품은 '{product_name}' 입니다.")
+            extra_rules.append(f"현재 상담 상품은 '{product_name}' 입니다.")
+            extra_rules.append("현재는 이미 상품 상세페이지 안입니다. 절대 '상품 상세페이지에서 다시 문의하세요' 같은 말은 하지 마세요.")
 
-        if color_options:
-            extra_rules.append(
-                f"실제 컬러 옵션은 {', '.join(color_options)} 입니다. 이 범위 안에서만 답하세요."
-            )
+            if color_options:
+                extra_rules.append(
+                    f"실제 컬러 옵션은 {', '.join(color_options)} 입니다. 이 범위 안에서만 답하세요."
+                )
 
-        if size_options:
-            extra_rules.append(
-                f"실제 사이즈 옵션은 {', '.join(size_options)} 입니다. 없는 사이즈는 절대 말하지 마세요."
-            )
+            if size_options:
+                extra_rules.append(
+                    f"실제 사이즈 옵션은 {', '.join(size_options)} 입니다. 없는 사이즈는 절대 말하지 마세요."
+                )
 
-        if size_result and size_result.get("recommended"):
-            extra_rules.append(
-                f"추천 사이즈는 '{size_result['recommended']}' 입니다. 이 값을 우선 기준으로 설명하세요."
-            )
+            if size_result and size_result.get("recommended"):
+                extra_rules.append(
+                    f"추천 사이즈는 '{size_result['recommended']}' 입니다. 이 값을 우선 기준으로 설명하세요."
+                )
+        else:
+            extra_rules.append("현재는 상품 상세페이지 안입니다. 상품명 파싱이 완전하지 않아도 '지금 보시는 상품' 기준으로 상담하세요.")
+            extra_rules.append("절대 '상품 상세페이지에서 다시 눌러주세요' 또는 '상세페이지에서 다시 문의하세요' 라고 말하지 마세요.")
+            extra_rules.append("현재 고객이 보고 있는 상품 기준으로 사이즈, 코디, 배송, 교환 상담을 이어가세요.")
+            if user_input:
+                extra_rules.append(f"고객 질문은 현재 보고 있는 상품에 대한 질문으로 간주하세요: {user_input}")
     else:
         extra_rules.append(
             "현재는 일반 상담 상태입니다. 상품별 정확한 상담은 상품 상세페이지에서 채팅 버튼을 다시 눌러주시면 더 정확하다고 자연스럽게 안내하세요."

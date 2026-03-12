@@ -1,8 +1,4 @@
 streamlit
-pandas
 requests
-yfinance
-pytz
-feedparser
-lxml
-html5lib
+beautifulsoup4
+openai

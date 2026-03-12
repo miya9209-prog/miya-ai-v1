@@ -3,7 +3,6 @@ import re
 import json
 import html
 import requests
-import urllib.parse
 import streamlit as st
 import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
@@ -681,6 +680,7 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           width: 100%;
           margin: 0;
           padding: 0;
+          align-items: end;
         }}
         .field {{
           min-width: 0;
@@ -689,13 +689,14 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           display: block;
           margin: 0 0 4px 0;
           font-size: 10.5px;
-          line-height: 1.15;
+          line-height: 1.1;
           font-weight: 700;
           color: #303443;
+          height: 12px;
         }}
         .input, .select {{
           width: 100%;
-          height: 36px;
+          height: 38px;
           border: 1px solid rgba(0,0,0,.05);
           border-radius: 12px;
           background: #f3f5f8;
@@ -705,6 +706,7 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           outline: none;
           min-width: 0;
           box-shadow: none;
+          display: block;
         }}
         .select {{
           appearance: none;
@@ -721,9 +723,10 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           }}
           .label {{
             font-size: 10px;
+            height: 12px;
           }}
           .input, .select {{
-            height: 36px;
+            height: 38px;
             font-size: 13px;
             padding-left: 10px;
             padding-right: 10px;
@@ -791,7 +794,7 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
     </body>
     </html>
     """
-    components.html(comp_html, height=102, scrolling=False)
+    components.html(comp_html, height=118, scrolling=False)
 
 
 context_key = build_context_key(current_url, product_no, product_name_q)
@@ -823,8 +826,8 @@ footer {visibility:hidden;}
 
 .block-container{
   max-width:760px;
-  padding-top:0.26rem !important;
-  padding-bottom:9.4rem !important;
+  padding-top:0.5rem !important;
+  padding-bottom:10.4rem !important;
   padding-left:14px !important;
   padding-right:14px !important;
 }
@@ -841,8 +844,8 @@ footer {visibility:hidden;}
 }
 
 hr{
-  margin-top:4px !important;
-  margin-bottom:4px !important;
+  margin-top:6px !important;
+  margin-bottom:6px !important;
   border-color:var(--miya-divider) !important;
 }
 
@@ -859,7 +862,7 @@ div[data-testid="stChatInput"]{
   position:fixed !important;
   left:50% !important;
   transform:translateX(-50%) !important;
-  bottom:48px !important;
+  bottom:58px !important;
   width:min(720px, calc(100% - 18px)) !important;
   z-index:9999 !important;
 }
@@ -867,14 +870,14 @@ div[data-testid="stChatInput"]{
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
-    padding-top:0.42rem !important;
-    padding-bottom:8.9rem !important;
+    padding-top:0.65rem !important;
+    padding-bottom:9.8rem !important;
     padding-left:12px !important;
     padding-right:12px !important;
   }
 
   div[data-testid="stChatInput"]{
-    bottom:54px !important;
+    bottom:62px !important;
     width:calc(100% - 14px) !important;
   }
 }

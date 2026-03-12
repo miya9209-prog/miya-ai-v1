@@ -4,6 +4,7 @@ import json
 import html
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
 from openai import OpenAI
 
@@ -110,6 +111,21 @@ qp = st.query_params
 current_url = qp_value(qp, "url", "")
 product_no = qp_value(qp, "pn", "")
 product_name_q = qp_value(qp, "pname", "")
+
+# 사이즈 입력값 URL 파라미터 동기화
+bh = qp_value(qp, "bh", "")
+bw = qp_value(qp, "bw", "")
+bt = qp_value(qp, "bt", "")
+bb = qp_value(qp, "bb", "")
+
+if bh != "":
+    st.session_state.body_height = bh
+if bw != "":
+    st.session_state.body_weight = bw
+if bt in SIZE_OPTIONS_UI:
+    st.session_state.body_top = bt
+if bb in SIZE_OPTIONS_UI:
+    st.session_state.body_bottom = bb
 
 
 def build_context_key(url: str, pn: str, pname: str) -> str:
@@ -667,13 +683,16 @@ footer {visibility:hidden;}
   --miya-sub:#5f6471;
   --miya-muted:#7a7f8c;
   --miya-divider:#d8dbe2;
-  --miya-card-bg:transparent;
   --miya-bot-bg:#071b4e;
   --miya-bot-text:#ffffff;
   --miya-user-bg:#dff0ec;
   --miya-user-text:#1f3b36;
   --miya-label:#303443;
+  --miya-input-bg:#f3f5f8;
   --miya-input-text:#303443;
+  --miya-chat-bg:#f3f5f8;
+  --miya-chat-text:#303443;
+  --miya-chat-placeholder:#7a7f8c;
 }
 
 @media (prefers-color-scheme: dark){
@@ -683,13 +702,16 @@ footer {visibility:hidden;}
     --miya-sub:#d1d5db;
     --miya-muted:#c0c7d1;
     --miya-divider:rgba(255,255,255,.14);
-    --miya-card-bg:transparent;
     --miya-bot-bg:#0b2a78;
     --miya-bot-text:#ffffff;
     --miya-user-bg:#dff0ec;
     --miya-user-text:#173630;
     --miya-label:#f3f4f6;
+    --miya-input-bg:#ffffff;
     --miya-input-text:#0f172a;
+    --miya-chat-bg:rgba(255,255,255,0.08);
+    --miya-chat-text:#ffffff;
+    --miya-chat-placeholder:rgba(255,255,255,0.72);
   }
 }
 
@@ -700,18 +722,20 @@ footer {visibility:hidden;}
 .block-container{
   max-width:760px;
   padding-top:0.6rem !important;
-  padding-bottom:10.2rem !important;
+  padding-bottom:10.4rem !important;
   padding-left:14px !important;
   padding-right:14px !important;
 }
 
-div[data-testid="column"]{
-  min-width:0 !important;
+div[data-testid="stHorizontalBlock"]{
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+  gap:8px !important;
+  align-items:start !important;
 }
 
-div[data-testid="stHorizontalBlock"]{
-  gap:8px !important;
-  flex-wrap:nowrap !important;
+div[data-testid="stHorizontalBlock"] > div{
+  min-width:0 !important;
 }
 
 div[data-testid="stTextInput"],
@@ -731,20 +755,25 @@ div[data-testid="stSelectbox"] label{
 div[data-testid="stTextInput"] input{
   border-radius:12px !important;
   min-width:0 !important;
+  width:100% !important;
   padding-left:12px !important;
   padding-right:12px !important;
   color:var(--miya-input-text) !important;
+  background:var(--miya-input-bg) !important;
 }
 
 div[data-baseweb="select"]{
   min-width:0 !important;
+  width:100% !important;
 }
 
 div[data-baseweb="select"] > div{
   border-radius:12px !important;
   min-width:0 !important;
+  width:100% !important;
   padding-right:30px !important;
   color:var(--miya-input-text) !important;
+  background:var(--miya-input-bg) !important;
 }
 
 hr{
@@ -762,6 +791,28 @@ div[data-testid="stChatInput"]{
   z-index:9999 !important;
 }
 
+div[data-testid="stChatInput"] > div{
+  background:var(--miya-chat-bg) !important;
+  border:1px solid rgba(255,255,255,.10) !important;
+}
+
+div[data-testid="stChatInput"] textarea,
+div[data-testid="stChatInput"] input{
+  color:var(--miya-chat-text) !important;
+  -webkit-text-fill-color:var(--miya-chat-text) !important;
+}
+
+div[data-testid="stChatInput"] textarea::placeholder,
+div[data-testid="stChatInput"] input::placeholder{
+  color:var(--miya-chat-placeholder) !important;
+  -webkit-text-fill-color:var(--miya-chat-placeholder) !important;
+  opacity:1 !important;
+}
+
+div[data-testid="stChatInput"] svg{
+  color:var(--miya-chat-placeholder) !important;
+}
+
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
@@ -772,7 +823,8 @@ div[data-testid="stChatInput"]{
   }
 
   div[data-testid="stHorizontalBlock"]{
-    gap:6px !important;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
+    gap:7px !important;
   }
 
   div[data-testid="stTextInput"] input{
@@ -805,7 +857,7 @@ div[data-testid="stChatInput"]{
 )
 
 st.markdown(
-    f"""
+    """
     <div style="text-align:center; margin:0 0 8px 0;">
       <div style="font-size:31px; font-weight:800; line-height:1.08; letter-spacing:-0.02em; color:var(--miya-title);">
         미샵 쇼핑친구 <span style="color:#0f8a7a;">미야언니</span>

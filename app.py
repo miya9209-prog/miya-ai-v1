@@ -111,7 +111,6 @@ current_url = qp_value(qp, "url", "")
 product_no = qp_value(qp, "pn", "")
 product_name_q = qp_value(qp, "pname", "")
 
-# 사이즈 입력값도 URL 파라미터로 유지
 bh = qp_value(qp, "bh", "")
 bw = qp_value(qp, "bw", "")
 bt = qp_value(qp, "bt", "")
@@ -226,15 +225,12 @@ def split_sections(text: str) -> dict:
 
 def nearby_label_text(select_tag) -> str:
     pieces = []
-
     prev_label = select_tag.find_previous(["label", "th", "dt", "strong", "span"])
     if prev_label:
         pieces.append(prev_label.get_text(" ", strip=True))
-
     parent = select_tag.parent
     if parent:
         pieces.append(parent.get_text(" ", strip=True)[:200])
-
     return clean_text(" ".join(pieces))
 
 
@@ -257,10 +253,8 @@ def looks_like_color_group(label_text: str, option_texts: list[str]) -> bool:
 def looks_like_size_group(label_text: str, option_texts: list[str]) -> bool:
     joined = " ".join(option_texts).upper()
     label_text_l = label_text.lower()
-
     if "사이즈" in label_text or "size" in label_text_l:
         return True
-
     size_patterns = [
         r"\b44\b", r"\b55\b", r"55반", r"\b66\b", r"66반", r"\b77\b", r"77반", r"\b88\b",
         r"\bS\b", r"\bM\b", r"\bL\b", r"\bXL\b", r"\bXXL\b", r"\bFREE\b", r"\bF\b"
@@ -270,7 +264,6 @@ def looks_like_size_group(label_text: str, option_texts: list[str]) -> bool:
 
 def extract_option_groups(soup: BeautifulSoup):
     groups = []
-
     for sel in soup.select("select"):
         name_attr = clean_text(sel.get("name", ""))
         id_attr = clean_text(sel.get("id", ""))
@@ -301,7 +294,6 @@ def extract_option_groups(soup: BeautifulSoup):
             continue
 
         label_text = nearby_label_text(sel)
-
         group_type = None
         if looks_like_color_group(label_text, option_texts):
             group_type = "color"
@@ -313,7 +305,6 @@ def extract_option_groups(soup: BeautifulSoup):
             "label": label_text,
             "options": option_texts,
         })
-
     return groups
 
 
@@ -672,34 +663,40 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           box-sizing: border-box;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
         }}
-        body {{
+        html, body {{
           margin: 0;
           padding: 0;
           background: transparent;
+          overflow: hidden;
         }}
         .wrap {{
           width: 100%;
+          margin: 0;
+          padding: 0;
         }}
         .grid {{
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 10px 10px;
+          gap: 8px 8px;
+          width: 100%;
+          margin: 0;
+          padding: 0;
         }}
         .field {{
           min-width: 0;
         }}
         .label {{
           display: block;
-          margin: 0 0 5px 0;
-          font-size: 11px;
-          line-height: 1.2;
+          margin: 0 0 4px 0;
+          font-size: 10.5px;
+          line-height: 1.15;
           font-weight: 700;
           color: #303443;
         }}
         .input, .select {{
           width: 100%;
-          height: 44px;
-          border: 1px solid rgba(0,0,0,.06);
+          height: 36px;
+          border: 1px solid rgba(0,0,0,.05);
           border-radius: 12px;
           background: #f3f5f8;
           color: #303443;
@@ -707,48 +704,33 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           padding: 0 12px;
           outline: none;
           min-width: 0;
+          box-shadow: none;
         }}
         .select {{
           appearance: none;
           -webkit-appearance: none;
-          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'><path d='M5 7.5L10 12.5L15 7.5' stroke='%23303443' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 20 20' fill='none'><path d='M5 7.5L10 12.5L15 7.5' stroke='%23303443' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
           background-repeat: no-repeat;
-          background-position: right 12px center;
-          padding-right: 38px;
-        }}
-        .btn-row {{
-          margin-top: 10px;
-          display: flex;
-          justify-content: flex-end;
-        }}
-        .btn {{
-          height: 34px;
-          border: none;
-          border-radius: 10px;
-          background: #0f6a63;
-          color: #fff;
-          font-size: 12px;
-          font-weight: 700;
-          padding: 0 14px;
-          cursor: pointer;
+          background-position: right 10px center;
+          padding-right: 30px;
         }}
         @media (max-width: 768px) {{
           .grid {{
             grid-template-columns: 1fr 1fr !important;
-            gap: 8px 8px !important;
+            gap: 7px 7px !important;
           }}
           .label {{
-            font-size: 10.5px;
+            font-size: 10px;
           }}
           .input, .select {{
-            height: 42px;
+            height: 36px;
             font-size: 13px;
             padding-left: 10px;
             padding-right: 10px;
           }}
           .select {{
-            padding-right: 34px;
-            background-position: right 10px center;
+            padding-right: 28px;
+            background-position: right 9px center;
           }}
         }}
       </style>
@@ -773,12 +755,11 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
             <select id="bb" class="select">{bottom_opts}</select>
           </div>
         </div>
-        <div class="btn-row">
-          <button class="btn" onclick="applyValues()">적용</button>
-        </div>
       </div>
 
       <script>
+        let timer = null;
+
         function applyValues() {{
           const bh = document.getElementById("bh").value || "";
           const bw = document.getElementById("bw").value || "";
@@ -796,11 +777,21 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
             console.error(e);
           }}
         }}
+
+        function scheduleApply() {{
+          clearTimeout(timer);
+          timer = setTimeout(applyValues, 250);
+        }}
+
+        document.getElementById("bh").addEventListener("change", scheduleApply);
+        document.getElementById("bw").addEventListener("change", scheduleApply);
+        document.getElementById("bt").addEventListener("change", scheduleApply);
+        document.getElementById("bb").addEventListener("change", scheduleApply);
       </script>
     </body>
     </html>
     """
-    components.html(comp_html, height=120, scrolling=False)
+    components.html(comp_html, height=102, scrolling=False)
 
 
 context_key = build_context_key(current_url, product_no, product_name_q)
@@ -832,8 +823,8 @@ footer {visibility:hidden;}
 
 .block-container{
   max-width:760px;
-  padding-top:0.28rem !important;
-  padding-bottom:9.8rem !important;
+  padding-top:0.26rem !important;
+  padding-bottom:9.4rem !important;
   padding-left:14px !important;
   padding-right:14px !important;
 }
@@ -850,13 +841,18 @@ footer {visibility:hidden;}
 }
 
 hr{
-  margin-top:6px !important;
-  margin-bottom:6px !important;
+  margin-top:4px !important;
+  margin-bottom:4px !important;
   border-color:var(--miya-divider) !important;
 }
 
 iframe[title="streamlit-component"]{
   width:100% !important;
+  display:block !important;
+  margin:0 !important;
+  padding:0 !important;
+  border:0 !important;
+  background:transparent !important;
 }
 
 div[data-testid="stChatInput"]{
@@ -871,8 +867,8 @@ div[data-testid="stChatInput"]{
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
-    padding-top:0.45rem !important;
-    padding-bottom:9.2rem !important;
+    padding-top:0.42rem !important;
+    padding-bottom:8.9rem !important;
     padding-left:12px !important;
     padding-right:12px !important;
   }
@@ -889,7 +885,7 @@ div[data-testid="stChatInput"]{
 
 st.markdown(
     """
-    <div style="text-align:center; margin:0 0 10px 0;">
+    <div style="text-align:center; margin:0 0 8px 0;">
       <div style="font-size:31px; font-weight:800; line-height:1.08; letter-spacing:-0.02em; color:#303443;">
         미샵 쇼핑친구 <span style="color:#0f6a63;">미야언니</span>
       </div>
@@ -903,11 +899,11 @@ st.markdown(
 
 st.markdown(
     """
-    <div style="margin-top:0; margin-bottom:2px;">
-      <div style="font-size:13px; font-weight:700; line-height:1.2; color:#303443; margin-bottom:4px;">
+    <div style="margin-top:0; margin-bottom:0;">
+      <div style="font-size:13px; font-weight:700; line-height:1.2; color:#303443; margin-bottom:3px;">
         사이즈 입력 <span style="font-size:11px; font-weight:500; color:#7a7f8c;">(더 구체적인 상담 가능)</span>
       </div>
-      <div style="padding:6px 6px 8px 6px; border:1px solid rgba(0,0,0,.05); border-radius:14px; background:transparent;">
+      <div style="padding:2px 0 0 0; border:none; border-radius:0; background:transparent;">
     """,
     unsafe_allow_html=True,
 )
@@ -924,13 +920,13 @@ st.markdown("</div></div>", unsafe_allow_html=True)
 body_summary = build_body_context_text(build_body_context())
 if any(build_body_context().values()):
     st.markdown(
-        f'<div style="margin-top:2px; margin-bottom:2px; font-size:10.8px; color:#7a7f8c;">현재 입력 정보: {html.escape(body_summary)}</div>',
+        f'<div style="margin-top:0; margin-bottom:2px; font-size:10.5px; color:#7a7f8c;">현재 입력 정보: {html.escape(body_summary)}</div>',
         unsafe_allow_html=True,
     )
 
 if size_result and size_result.get("recommended"):
     st.markdown(
-        f'<div style="margin-top:2px; margin-bottom:2px; font-size:10.8px; color:#7a7f8c;">참고 추천 사이즈: {html.escape(size_result["recommended"])} · {html.escape(size_result["reason"])}</div>',
+        f'<div style="margin-top:0; margin-bottom:2px; font-size:10.5px; color:#7a7f8c;">참고 추천 사이즈: {html.escape(size_result["recommended"])} · {html.escape(size_result["reason"])}</div>',
         unsafe_allow_html=True,
     )
 

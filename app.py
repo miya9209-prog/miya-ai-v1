@@ -441,23 +441,48 @@ def extract_all_korean_size_ranks(text: str):
     return found
 
 
+def extract_size_option_texts_from_context(product_context: dict | None):
+    if not product_context:
+        return []
+
+    texts = []
+
+    for s in normalize_size_options(product_context.get("size_options", [])):
+        if s:
+            texts.append(s)
+
+    raw_sources = [
+        clean_text(product_context.get("size_tip", "")),
+        clean_text(product_context.get("raw_excerpt", "")),
+    ]
+
+    for src in raw_sources:
+        if not src:
+            continue
+        found = re.findall(r"(?:^|\s|,)(?:FREE|F|S|M|L|XL|XXL)\s*\(([^)]*)\)", src, flags=re.I)
+        for inner in found:
+            inner = clean_text(inner)
+            if inner:
+                texts.append(inner)
+
+    return uniq_keep_order(texts)
+
+
 def extract_max_supported_rank_from_context(product_context: dict | None):
     if not product_context:
         return None
 
     candidates = []
 
-    # 1) 실제 옵션 문자열에서 우선 추출
     for s in normalize_size_options(product_context.get("size_options", [])):
         candidates.extend(extract_all_korean_size_ranks(s))
 
-    # 2) 사이즈 TIP에서 추출
-    candidates.extend(extract_all_korean_size_ranks(product_context.get("size_tip", "")))
+    for s in extract_size_option_texts_from_context(product_context):
+        candidates.extend(extract_all_korean_size_ranks(s))
 
     if not candidates:
         return None
     return max(candidates)
-
 
 def is_user_size_over_product_limit(user_top_size: str, product_context: dict | None):
     user_rank = size_rank_korean(user_top_size)
@@ -653,11 +678,13 @@ def build_hard_size_answer(product_context: dict | None):
         return None
 
     max_label = KOR_SIZE_LABEL.get(max_rank, "")
-    size_options = normalize_size_options(product_context.get("size_options", []))
-    option_text = ", ".join(size_options) if size_options else ""
-    size_tip = clean_text(product_context.get("size_tip", ""))
+    option_text = ", ".join(normalize_size_options(product_context.get("size_options", [])))
+    extracted_option_ranges = ", ".join(extract_size_option_texts_from_context(product_context))
 
-    basis = option_text or size_tip or f"최대 {max_label}"
+    if option_text and extracted_option_ranges:
+        basis = f"{option_text} / {extracted_option_ranges}"
+    else:
+        basis = option_text or extracted_option_ranges or f"최대 {max_label}"
 
     return (
         f"입력하신 상의 {top_size} 기준이면 이 상품은 페이지상 {basis}까지라 "
@@ -665,7 +692,6 @@ def build_hard_size_answer(product_context: dict | None):
         f"최대 권장 범위가 {max_label}까지로 보여서 타이트할 수 있고, "
         f"편안함 우선이면 77 이상 커버되는 상의를 보시는 쪽이 더 안전해요."
     )
-
 
 def build_context_pack(product_context: dict | None):
     body_context = build_body_context()
@@ -757,380 +783,25 @@ def process_user_message(user_text: str, product_context: dict | None):
         st.session_state.messages.append({"role": "assistant", "content": fast})
         return
 
-    if is_size_question(user_text):
-        hard_answer = build_hard_size_answer(product_context)
-        if hard_answer:
-            st.session_state.messages.append({"role": "assistant", "content": hard_answer})
-            return
+    if is_size_question(user_text) and product_context:
+        body_ctx = build_body_context()
+        top_size = clean_text(body_ctx.get("top_size", ""))
+        if top_size:
+            hard_answer = build_hard_size_answer(product_context)
+            if hard_answer:
+                st.session_state.messages.append({"role": "assistant", "content": hard_answer})
+                return
+
+            forced_check = recommend_size(
+                body_ctx.get("height_cm", ""),
+                body_ctx.get("weight_kg", ""),
+                top_size,
+                product_context,
+            )
+            if forced_check.get("status") == "over_limit":
+                st.session_state.messages.append({"role": "assistant", "content": forced_check.get("reason", "권장 범위를 넘는 것으로 보여요.")})
+                return
 
     answer = get_llm_answer(user_text, product_context)
     st.session_state.messages.append({"role": "assistant", "content": answer})
 
-
-context_key = build_context_key(current_url, product_no, product_name_q)
-if context_key != st.session_state.last_context_key:
-    st.session_state.last_context_key = context_key
-    st.session_state.messages = []
-
-product_context = None
-if current_url and is_product_page(current_url, product_no):
-    product_context = fetch_product_context_cached(current_url, product_name_q)
-
-body_ctx = build_body_context()
-size_result = None
-if product_context:
-    size_result = recommend_size(
-        body_ctx.get("height_cm", ""),
-        body_ctx.get("weight_kg", ""),
-        body_ctx.get("top_size", ""),
-        product_context,
-    )
-
-st.markdown(
-    """
-<style>
-header[data-testid="stHeader"] {display:none;}
-div[data-testid="stToolbar"] {display:none;}
-#MainMenu {visibility:hidden;}
-footer {visibility:hidden;}
-
-:root{
-  --miya-page-bg:#ffffff;
-  --miya-title:#303443;
-  --miya-sub:#5f6471;
-  --miya-muted:#7a7f8c;
-  --miya-divider:#d8dbe2;
-  --miya-bot-bg:#071b4e;
-  --miya-bot-text:#ffffff;
-  --miya-user-bg:#dff0ec;
-  --miya-user-text:#1f3b36;
-  --miya-label:#303443;
-  --miya-input-bg:#f3f5f8;
-  --miya-input-text:#303443;
-  --miya-chat-bg:#f3f5f8;
-  --miya-chat-text:#303443;
-  --miya-chat-placeholder:#7a7f8c;
-}
-
-@media (prefers-color-scheme: dark){
-  :root{
-    --miya-page-bg:#0b1220;
-    --miya-title:#f3f4f6;
-    --miya-sub:#d1d5db;
-    --miya-muted:#c0c7d1;
-    --miya-divider:rgba(255,255,255,.14);
-    --miya-bot-bg:#0b2a78;
-    --miya-bot-text:#ffffff;
-    --miya-user-bg:#dff0ec;
-    --miya-user-text:#173630;
-    --miya-label:#f3f4f6;
-    --miya-input-bg:#ffffff;
-    --miya-input-text:#0f172a;
-    --miya-chat-bg:rgba(255,255,255,0.08);
-    --miya-chat-text:#ffffff;
-    --miya-chat-placeholder:rgba(255,255,255,0.72);
-  }
-}
-
-.stApp{
-  background:var(--miya-page-bg) !important;
-}
-
-.block-container{
-  max-width:820px;
-  padding-top:0.6rem !important;
-  padding-bottom:10.4rem !important;
-  padding-left:14px !important;
-  padding-right:14px !important;
-}
-
-div[data-testid="stHorizontalBlock"]{
-  display:grid !important;
-  grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
-  gap:12px !important;
-  align-items:start !important;
-  width:100% !important;
-}
-
-div[data-testid="stHorizontalBlock"] > div,
-div[data-testid="column"]{
-  min-width:0 !important;
-  width:100% !important;
-}
-
-div[data-testid="stTextInput"],
-div[data-testid="stSelectbox"]{
-  margin-bottom:-2px !important;
-  width:100% !important;
-}
-
-div[data-testid="stTextInput"] label,
-div[data-testid="stSelectbox"] label{
-  color:var(--miya-label) !important;
-  font-weight:700 !important;
-  font-size:12px !important;
-  line-height:1.15 !important;
-  margin-bottom:4px !important;
-}
-
-div[data-testid="stTextInput"] input{
-  border-radius:12px !important;
-  min-width:0 !important;
-  width:100% !important;
-  height:46px !important;
-  padding-left:14px !important;
-  padding-right:14px !important;
-  color:var(--miya-input-text) !important;
-  background:var(--miya-input-bg) !important;
-}
-
-div[data-testid="stTextInput"] input::placeholder{
-  color:#8a90a0 !important;
-  opacity:1 !important;
-}
-
-div[data-baseweb="select"]{
-  min-width:0 !important;
-  width:100% !important;
-}
-
-div[data-baseweb="select"] > div{
-  border-radius:12px !important;
-  min-width:0 !important;
-  width:100% !important;
-  min-height:46px !important;
-  padding-right:38px !important;
-  color:var(--miya-input-text) !important;
-  background:var(--miya-input-bg) !important;
-}
-
-div[data-baseweb="select"] svg{
-  display:block !important;
-  visibility:visible !important;
-  opacity:1 !important;
-  color:#111827 !important;
-  fill:#111827 !important;
-  width:18px !important;
-  height:18px !important;
-}
-
-hr{
-  margin-top:6px !important;
-  margin-bottom:6px !important;
-  border-color:var(--miya-divider) !important;
-}
-
-div[data-testid="stChatInput"]{
-  position:fixed !important;
-  left:50% !important;
-  transform:translateX(-50%) !important;
-  bottom:58px !important;
-  width:min(760px, calc(100% - 18px)) !important;
-  z-index:9999 !important;
-}
-
-div[data-testid="stChatInput"] > div{
-  background:var(--miya-chat-bg) !important;
-  border:1px solid rgba(255,255,255,.10) !important;
-}
-
-div[data-testid="stChatInput"] textarea,
-div[data-testid="stChatInput"] input{
-  color:var(--miya-chat-text) !important;
-  -webkit-text-fill-color:var(--miya-chat-text) !important;
-}
-
-div[data-testid="stChatInput"] textarea::placeholder,
-div[data-testid="stChatInput"] input::placeholder{
-  color:var(--miya-chat-placeholder) !important;
-  -webkit-text-fill-color:var(--miya-chat-placeholder) !important;
-  opacity:1 !important;
-}
-
-div[data-testid="stChatInput"] svg{
-  color:var(--miya-chat-placeholder) !important;
-}
-
-@media (max-width: 768px){
-  .block-container{
-    max-width:100%;
-    padding-top:0.9rem !important;
-    padding-bottom:8.2rem !important;
-    padding-left:12px !important;
-    padding-right:12px !important;
-  }
-
-  div[data-testid="stHorizontalBlock"]{
-    grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
-    gap:8px !important;
-  }
-
-  div[data-testid="stTextInput"] label,
-  div[data-testid="stSelectbox"] label{
-    font-size:11px !important;
-  }
-
-  div[data-testid="stTextInput"] input{
-    height:44px !important;
-    padding-left:12px !important;
-    padding-right:12px !important;
-  }
-
-  div[data-baseweb="select"] > div{
-    min-height:44px !important;
-    padding-right:34px !important;
-  }
-
-  div[data-baseweb="select"] svg{
-    width:18px !important;
-    height:18px !important;
-  }
-
-  div[data-testid="stChatInput"]{
-    position:sticky !important;
-    left:auto !important;
-    transform:none !important;
-    bottom:auto !important;
-    width:100% !important;
-    z-index:5 !important;
-    margin-top:10px !important;
-  }
-}
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <div style="text-align:center; margin:0 0 8px 0;">
-      <div style="font-size:31px; font-weight:800; line-height:1.08; letter-spacing:-0.02em; color:var(--miya-title);">
-        미샵 쇼핑친구 <span style="color:#0f8a7a;">미야언니</span>
-      </div>
-      <div style="margin-top:4px; font-size:13px; line-height:1.3; color:var(--miya-sub);">
-        24시간 쇼핑 판단에 도움을 드리는 똑똑한 쇼핑친구
-      </div>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-st.markdown(
-    """
-    <div style="margin-top:0; margin-bottom:2px;">
-      <div style="font-size:13px; font-weight:700; line-height:1.2; color:var(--miya-title); margin-bottom:4px;">
-        사이즈 입력 <span style="font-size:11px; font-weight:500; color:var(--miya-muted);">(더 구체적인 상담 가능)</span>
-      </div>
-    """,
-    unsafe_allow_html=True,
-)
-
-row1 = st.columns(2, gap="small")
-with row1[0]:
-    st.session_state.body_height = st.text_input(
-        "키",
-        value=st.session_state.body_height,
-        placeholder="cm",
-        key="body_height_input",
-    )
-with row1[1]:
-    st.session_state.body_weight = st.text_input(
-        "체중",
-        value=st.session_state.body_weight,
-        placeholder="kg",
-        key="body_weight_input",
-    )
-
-row2 = st.columns(2, gap="small")
-with row2[0]:
-    current_top = st.session_state.body_top if st.session_state.body_top in SIZE_OPTIONS_UI else ""
-    st.session_state.body_top = st.selectbox(
-        "상의",
-        options=SIZE_OPTIONS_UI,
-        index=SIZE_OPTIONS_UI.index(current_top),
-        key="body_top_input",
-    )
-with row2[1]:
-    current_bottom = st.session_state.body_bottom if st.session_state.body_bottom in SIZE_OPTIONS_UI else ""
-    st.session_state.body_bottom = st.selectbox(
-        "하의",
-        options=SIZE_OPTIONS_UI,
-        index=SIZE_OPTIONS_UI.index(current_bottom),
-        key="body_bottom_input",
-    )
-
-st.markdown(
-    '<div style="margin-top:4px; font-size:10px; line-height:1.2; color:var(--miya-muted);">입력 후 바로 상담에 반영돼요.</div></div>',
-    unsafe_allow_html=True,
-)
-
-body_summary = build_body_context_text(build_body_context())
-if any(build_body_context().values()):
-    st.markdown(
-        f'<div style="margin-top:2px; margin-bottom:2px; font-size:10.5px; color:var(--miya-muted);">현재 입력 정보: {html.escape(body_summary)}</div>',
-        unsafe_allow_html=True,
-    )
-
-if size_result and size_result.get("recommended"):
-    st.markdown(
-        f'<div style="margin-top:0; margin-bottom:2px; font-size:10.5px; color:var(--miya-muted);">참고 추천 사이즈: {html.escape(size_result["recommended"])} · {html.escape(size_result["reason"])}</div>',
-        unsafe_allow_html=True,
-    )
-elif size_result and size_result.get("status") == "over_limit":
-    st.markdown(
-        f'<div style="margin-top:0; margin-bottom:2px; font-size:10.5px; color:#dc2626;">사이즈 주의: {html.escape(size_result["reason"])}</div>',
-        unsafe_allow_html=True,
-    )
-
-if not st.session_state.messages:
-    if is_product_page(current_url, product_no):
-        welcome = (
-            "안녕하세요? 옷 같이 봐드리는 미야언니예요:)\n"
-            "'지금 보시는 상품' 기준으로 같이 봐드릴게요.\n"
-            "사이즈, 코디, 배송, 교환 중 뭐부터 이야기해볼까요?"
-        )
-    else:
-        welcome = (
-            "안녕하세요? 옷 같이 봐드리는 미야언니예요:)\n"
-            "지금은 일반 상담 모드예요.\n"
-            "상품 상세페이지에서 채팅창을 열면\n"
-            "그 상품 기준으로 더 정확하게 상담해드릴 수 있어요.\n\n"
-            "궁금한 상품이 있으면 이 채팅창을 끄고\n"
-            "상품 페이지에서 다시 채팅창을 열어주세요:)"
-        )
-    st.session_state.messages.append({"role": "assistant", "content": welcome})
-
-st.divider()
-
-for msg in st.session_state.messages:
-    safe_text = html.escape(msg["content"]).replace("\n", "<br>")
-
-    if msg["role"] == "user":
-        st.markdown(
-            (
-                '<div style="display:flex; justify-content:flex-end; width:100%; margin:2px 0 4px 0;">'
-                '<div style="max-width:92%;">'
-                '<div style="display:block; font-size:12px; font-weight:700; line-height:1.15; color:#0f8a7a; text-align:right; margin:0 6px 1px 0;">고객님</div>'
-                f'<div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.52; white-space:pre-wrap; word-break:keep-all; background:var(--miya-user-bg); color:var(--miya-user-text); border:1px solid rgba(15,106,99,.14);">{safe_text}</div>'
-                '</div>'
-                '</div>'
-            ),
-            unsafe_allow_html=True,
-        )
-    else:
-        st.markdown(
-            (
-                '<div style="display:flex; justify-content:flex-start; width:100%; margin:2px 0 4px 0;">'
-                '<div style="max-width:92%;">'
-                '<div style="display:block; font-size:12px; font-weight:700; line-height:1.15; color:var(--miya-sub); margin:0 0 1px 6px;">미야언니</div>'
-                f'<div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.52; white-space:pre-wrap; word-break:keep-all; background:var(--miya-bot-bg); color:var(--miya-bot-text); border:1px solid rgba(255,255,255,.08);">{safe_text}</div>'
-                '</div>'
-                '</div>'
-            ),
-            unsafe_allow_html=True,
-        )
-
-user_input = st.chat_input("메시지를 입력하세요…")
-if user_input:
-    process_user_message(user_input, product_context)
-    st.rerun()

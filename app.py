@@ -664,8 +664,10 @@ footer {visibility:hidden;}
 
 .block-container{
   max-width:760px;
-  padding-top:0.35rem !important;
-  padding-bottom:10.2rem !important;
+  padding-top:0.28rem !important;
+  padding-bottom:9.8rem !important;
+  padding-left:14px !important;
+  padding-right:14px !important;
 }
 
 :root{
@@ -679,34 +681,43 @@ footer {visibility:hidden;}
   --miya-user-text:#1f3b36;
 }
 
-/* 핵심 수정: 2열 강제 유지 */
-div[data-testid="stHorizontalBlock"]{
-  display:flex !important;
-  flex-wrap:nowrap !important;
-  gap:8px !important;
-  align-items:flex-start !important;
-}
-
 div[data-testid="column"]{
   min-width:0 !important;
-  flex:1 1 0 !important;
+}
+
+div[data-testid="stHorizontalBlock"]{
+  gap:8px !important;
+}
+
+div[data-testid="stTextInput"],
+div[data-testid="stSelectbox"]{
+  margin-bottom:-2px !important;
+}
+
+div[data-testid="stTextInput"] input{
+  border-radius:12px !important;
+  min-width:0 !important;
+  padding-left:12px !important;
+  padding-right:12px !important;
+}
+
+div[data-baseweb="select"]{
+  min-width:0 !important;
+}
+
+div[data-baseweb="select"] > div{
+  border-radius:12px !important;
+  min-width:0 !important;
+  padding-right:30px !important;
 }
 
 div[data-testid="stTextInput"] label,
 div[data-testid="stSelectbox"] label{
   color:var(--miya-title) !important;
   font-weight:700 !important;
-  font-size:11.5px !important;
-}
-
-div[data-testid="stTextInput"] input,
-div[data-baseweb="select"] > div{
-  border-radius:12px !important;
-}
-
-div[data-testid="stTextInput"],
-div[data-testid="stSelectbox"]{
-  margin-bottom:-2px !important;
+  font-size:11px !important;
+  line-height:1.15 !important;
+  margin-bottom:3px !important;
 }
 
 hr{
@@ -719,37 +730,41 @@ div[data-testid="stChatInput"]{
   position:fixed !important;
   left:50% !important;
   transform:translateX(-50%) !important;
-  bottom:52px !important;
-  width:min(720px, calc(100% - 24px)) !important;
+  bottom:48px !important;
+  width:min(720px, calc(100% - 18px)) !important;
   z-index:9999 !important;
 }
 
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
-    padding-top:0.62rem !important;
-    padding-bottom:9.6rem !important;
+    padding-top:0.45rem !important;
+    padding-bottom:9.2rem !important;
+    padding-left:12px !important;
+    padding-right:12px !important;
   }
 
   div[data-testid="stHorizontalBlock"]{
-    display:flex !important;
-    flex-wrap:nowrap !important;
     gap:6px !important;
   }
 
-  div[data-testid="column"]{
-    min-width:0 !important;
-    flex:1 1 0 !important;
+  div[data-testid="stTextInput"] input{
+    padding-left:10px !important;
+    padding-right:10px !important;
+  }
+
+  div[data-baseweb="select"] > div{
+    padding-right:26px !important;
   }
 
   div[data-testid="stTextInput"] label,
   div[data-testid="stSelectbox"] label{
-    font-size:11px !important;
+    font-size:10.5px !important;
   }
 
   div[data-testid="stChatInput"]{
-    bottom:56px !important;
-    width:calc(100% - 16px) !important;
+    bottom:54px !important;
+    width:calc(100% - 14px) !important;
   }
 }
 </style>
@@ -777,12 +792,12 @@ st.markdown(
       <div style="font-size:13px; font-weight:700; line-height:1.2; color:#303443; margin-bottom:4px;">
         사이즈 입력 <span style="font-size:11px; font-weight:500; color:#7a7f8c;">(더 구체적인 상담 가능)</span>
       </div>
-      <div style="padding:6px 8px 0 8px; border:1px solid rgba(0,0,0,.05); border-radius:14px; background:transparent;">
+      <div style="padding:6px 6px 0 6px; border:1px solid rgba(0,0,0,.05); border-radius:14px; background:transparent;">
     """,
     unsafe_allow_html=True,
 )
 
-row1 = st.columns(2, gap="small")
+row1 = st.columns([1, 1], gap="small")
 with row1[0]:
     st.session_state.body_height = st.text_input(
         "키",
@@ -798,7 +813,7 @@ with row1[1]:
         key="body_weight_input",
     )
 
-row2 = st.columns(2, gap="small")
+row2 = st.columns([1, 1], gap="small")
 with row2[0]:
     current_top = st.session_state.body_top if st.session_state.body_top in SIZE_OPTIONS_UI else ""
     st.session_state.body_top = st.selectbox(
@@ -844,9 +859,7 @@ if not st.session_state.messages:
             "원하시는 상품 기준으로 같이 봐드릴게요!\n"
             "사이즈, 코디, 배송,교환 중 뭐부터 얘기해볼까요?"
         )
-    st.session_state.messages.append(
-        {"role": "assistant", "content": welcome}
-    )
+    st.session_state.messages.append({"role": "assistant", "content": welcome})
 
 st.divider()
 

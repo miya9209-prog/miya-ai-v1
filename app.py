@@ -3,7 +3,9 @@ import re
 import json
 import html
 import requests
+import urllib.parse
 import streamlit as st
+import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
 from openai import OpenAI
 
@@ -108,6 +110,21 @@ qp = st.query_params
 current_url = qp_value(qp, "url", "")
 product_no = qp_value(qp, "pn", "")
 product_name_q = qp_value(qp, "pname", "")
+
+# 사이즈 입력값도 URL 파라미터로 유지
+bh = qp_value(qp, "bh", "")
+bw = qp_value(qp, "bw", "")
+bt = qp_value(qp, "bt", "")
+bb = qp_value(qp, "bb", "")
+
+if bh:
+    st.session_state.body_height = bh
+if bw:
+    st.session_state.body_weight = bw
+if bt in SIZE_OPTIONS_UI:
+    st.session_state.body_top = bt
+if bb in SIZE_OPTIONS_UI:
+    st.session_state.body_bottom = bb
 
 
 def build_context_key(url: str, pn: str, pname: str) -> str:
@@ -635,6 +652,157 @@ def process_user_message(user_text: str, product_context: dict | None):
     st.session_state.messages.append({"role": "assistant", "content": answer})
 
 
+def render_size_input_component(height_val: str, weight_val: str, top_val: str, bottom_val: str):
+    top_opts = "".join(
+        f'<option value="{html.escape(x)}" {"selected" if x == top_val else ""}>{html.escape(x or "선택")}</option>'
+        for x in SIZE_OPTIONS_UI
+    )
+    bottom_opts = "".join(
+        f'<option value="{html.escape(x)}" {"selected" if x == bottom_val else ""}>{html.escape(x or "선택")}</option>'
+        for x in SIZE_OPTIONS_UI
+    )
+
+    comp_html = f"""
+    <!doctype html>
+    <html>
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1" />
+      <style>
+        * {{
+          box-sizing: border-box;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }}
+        body {{
+          margin: 0;
+          padding: 0;
+          background: transparent;
+        }}
+        .wrap {{
+          width: 100%;
+        }}
+        .grid {{
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px 10px;
+        }}
+        .field {{
+          min-width: 0;
+        }}
+        .label {{
+          display: block;
+          margin: 0 0 5px 0;
+          font-size: 11px;
+          line-height: 1.2;
+          font-weight: 700;
+          color: #303443;
+        }}
+        .input, .select {{
+          width: 100%;
+          height: 44px;
+          border: 1px solid rgba(0,0,0,.06);
+          border-radius: 12px;
+          background: #f3f5f8;
+          color: #303443;
+          font-size: 14px;
+          padding: 0 12px;
+          outline: none;
+          min-width: 0;
+        }}
+        .select {{
+          appearance: none;
+          -webkit-appearance: none;
+          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 20 20' fill='none'><path d='M5 7.5L10 12.5L15 7.5' stroke='%23303443' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+          background-repeat: no-repeat;
+          background-position: right 12px center;
+          padding-right: 38px;
+        }}
+        .btn-row {{
+          margin-top: 10px;
+          display: flex;
+          justify-content: flex-end;
+        }}
+        .btn {{
+          height: 34px;
+          border: none;
+          border-radius: 10px;
+          background: #0f6a63;
+          color: #fff;
+          font-size: 12px;
+          font-weight: 700;
+          padding: 0 14px;
+          cursor: pointer;
+        }}
+        @media (max-width: 768px) {{
+          .grid {{
+            grid-template-columns: 1fr 1fr !important;
+            gap: 8px 8px !important;
+          }}
+          .label {{
+            font-size: 10.5px;
+          }}
+          .input, .select {{
+            height: 42px;
+            font-size: 13px;
+            padding-left: 10px;
+            padding-right: 10px;
+          }}
+          .select {{
+            padding-right: 34px;
+            background-position: right 10px center;
+          }}
+        }}
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="grid">
+          <div class="field">
+            <label class="label">키</label>
+            <input id="bh" class="input" type="text" placeholder="cm" value="{html.escape(height_val)}" />
+          </div>
+          <div class="field">
+            <label class="label">체중</label>
+            <input id="bw" class="input" type="text" placeholder="kg" value="{html.escape(weight_val)}" />
+          </div>
+          <div class="field">
+            <label class="label">상의</label>
+            <select id="bt" class="select">{top_opts}</select>
+          </div>
+          <div class="field">
+            <label class="label">하의</label>
+            <select id="bb" class="select">{bottom_opts}</select>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn" onclick="applyValues()">적용</button>
+        </div>
+      </div>
+
+      <script>
+        function applyValues() {{
+          const bh = document.getElementById("bh").value || "";
+          const bw = document.getElementById("bw").value || "";
+          const bt = document.getElementById("bt").value || "";
+          const bb = document.getElementById("bb").value || "";
+
+          try {{
+            const url = new URL(window.parent.location.href);
+            url.searchParams.set("bh", bh);
+            url.searchParams.set("bw", bw);
+            url.searchParams.set("bt", bt);
+            url.searchParams.set("bb", bb);
+            window.parent.location.href = url.toString();
+          }} catch (e) {{
+            console.error(e);
+          }}
+        }}
+      </script>
+    </body>
+    </html>
+    """
+    components.html(comp_html, height=120, scrolling=False)
+
+
 context_key = build_context_key(current_url, product_no, product_name_q)
 if context_key != st.session_state.last_context_key:
     st.session_state.last_context_key = context_key
@@ -681,49 +849,14 @@ footer {visibility:hidden;}
   --miya-user-text:#1f3b36;
 }
 
-div[data-testid="column"]{
-  min-width:0 !important;
-}
-
-div[data-testid="stHorizontalBlock"]{
-  gap:8px !important;
-}
-
-div[data-testid="stTextInput"],
-div[data-testid="stSelectbox"]{
-  margin-bottom:-2px !important;
-}
-
-div[data-testid="stTextInput"] input{
-  border-radius:12px !important;
-  min-width:0 !important;
-  padding-left:12px !important;
-  padding-right:12px !important;
-}
-
-div[data-baseweb="select"]{
-  min-width:0 !important;
-}
-
-div[data-baseweb="select"] > div{
-  border-radius:12px !important;
-  min-width:0 !important;
-  padding-right:30px !important;
-}
-
-div[data-testid="stTextInput"] label,
-div[data-testid="stSelectbox"] label{
-  color:var(--miya-title) !important;
-  font-weight:700 !important;
-  font-size:11px !important;
-  line-height:1.15 !important;
-  margin-bottom:3px !important;
-}
-
 hr{
   margin-top:6px !important;
   margin-bottom:6px !important;
   border-color:var(--miya-divider) !important;
+}
+
+iframe[title="streamlit-component"]{
+  width:100% !important;
 }
 
 div[data-testid="stChatInput"]{
@@ -742,24 +875,6 @@ div[data-testid="stChatInput"]{
     padding-bottom:9.2rem !important;
     padding-left:12px !important;
     padding-right:12px !important;
-  }
-
-  div[data-testid="stHorizontalBlock"]{
-    gap:6px !important;
-  }
-
-  div[data-testid="stTextInput"] input{
-    padding-left:10px !important;
-    padding-right:10px !important;
-  }
-
-  div[data-baseweb="select"] > div{
-    padding-right:26px !important;
-  }
-
-  div[data-testid="stTextInput"] label,
-  div[data-testid="stSelectbox"] label{
-    font-size:10.5px !important;
   }
 
   div[data-testid="stChatInput"]{
@@ -792,44 +907,17 @@ st.markdown(
       <div style="font-size:13px; font-weight:700; line-height:1.2; color:#303443; margin-bottom:4px;">
         사이즈 입력 <span style="font-size:11px; font-weight:500; color:#7a7f8c;">(더 구체적인 상담 가능)</span>
       </div>
-      <div style="padding:6px 6px 0 6px; border:1px solid rgba(0,0,0,.05); border-radius:14px; background:transparent;">
+      <div style="padding:6px 6px 8px 6px; border:1px solid rgba(0,0,0,.05); border-radius:14px; background:transparent;">
     """,
     unsafe_allow_html=True,
 )
 
-row1 = st.columns([1, 1], gap="small")
-with row1[0]:
-    st.session_state.body_height = st.text_input(
-        "키",
-        value=st.session_state.body_height,
-        placeholder="cm",
-        key="body_height_input",
-    )
-with row1[1]:
-    st.session_state.body_weight = st.text_input(
-        "체중",
-        value=st.session_state.body_weight,
-        placeholder="kg",
-        key="body_weight_input",
-    )
-
-row2 = st.columns([1, 1], gap="small")
-with row2[0]:
-    current_top = st.session_state.body_top if st.session_state.body_top in SIZE_OPTIONS_UI else ""
-    st.session_state.body_top = st.selectbox(
-        "상의",
-        options=SIZE_OPTIONS_UI,
-        index=SIZE_OPTIONS_UI.index(current_top),
-        key="body_top_input",
-    )
-with row2[1]:
-    current_bottom = st.session_state.body_bottom if st.session_state.body_bottom in SIZE_OPTIONS_UI else ""
-    st.session_state.body_bottom = st.selectbox(
-        "하의",
-        options=SIZE_OPTIONS_UI,
-        index=SIZE_OPTIONS_UI.index(current_bottom),
-        key="body_bottom_input",
-    )
+render_size_input_component(
+    st.session_state.body_height,
+    st.session_state.body_weight,
+    st.session_state.body_top,
+    st.session_state.body_bottom,
+)
 
 st.markdown("</div></div>", unsafe_allow_html=True)
 

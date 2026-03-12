@@ -10,7 +10,7 @@ from openai import OpenAI
 st.set_page_config(
     page_title="미야언니",
     layout="centered",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="collapsed",
 )
 
 OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", os.getenv("OPENAI_API_KEY", ""))
@@ -30,15 +30,15 @@ POLICY_DB = {
         "reservation_product": "예약상품 개념 없음",
         "combined_shipping": "합배송 가능(1박스 기준). 단 박스 크기 초과 시 합배송 불가",
         "dispatch_order": "결제 순서대로 순차 출고",
-        "jeju": "제주 및 도서산간 지역은 추가배송비가 자동 부과됩니다."
+        "jeju": "제주 및 도서산간 지역은 추가배송비가 자동 부과됩니다.",
     },
     "exchange_return": {
         "exchange_possible": "사이즈 교환 가능 / 동일상품 교환 가능 / 타상품 교환 가능",
         "period": "상품 수령 후 7일 이내",
         "exchange_fee": 6000,
         "return_fee_rule": "단순 변심 반품: 반품 후 주문금액이 7만원 이상이면 편도 3,000원 / 7만원 미만이면 왕복 6,000원",
-        "defect_wrong": "불량/오배송은 미샵 부담입니다."
-    }
+        "defect_wrong": "불량/오배송은 미샵 부담입니다.",
+    },
 }
 
 SYSTEM_PROMPT = """
@@ -71,13 +71,14 @@ SYSTEM_PROMPT = """
 - 상품 정보가 일부 부족해도 현재 페이지 기준으로 최대한 도움 되는 답을 한다.
 - 사용자가 키/체중/상의/하의를 입력했다면 그 정보를 우선 사용한다.
 - 사용자가 체형 정보를 이미 입력했다면 다시 체형을 묻지 않는다.
+- 상품 최대 권장 범위를 넘는 고객에게는 '잘 맞는다', '편하게 맞는다', '추천드린다'라고 말하지 않는다.
 """
 
 GENERIC_NAMES = {"미샵", "misharp", "MISHARP", "미샵여성", "Misharp"}
 COLOR_HINTS = [
     "블랙", "아이보리", "크림", "화이트", "베이지", "오트밀", "그레이", "차콜",
     "네이비", "블루", "소라", "카키", "브라운", "핑크", "레드", "와인",
-    "버건디", "퍼플", "민트", "옐로우", "청", "중청", "연청", "진청"
+    "버건디", "퍼플", "민트", "옐로우", "청", "중청", "연청", "진청",
 ]
 SIZE_OPTIONS_UI = ["", "44", "55", "55반", "66", "66반", "77", "77반", "88"]
 
@@ -205,7 +206,7 @@ def split_sections(text: str) -> dict:
         "material": extract_by_keywords(["소재", "원단", "혼용", "%", "면", "폴리", "레이온", "아크릴", "울", "스판", "비스코스", "나일론"]),
         "fit": extract_by_keywords(["핏", "여유", "라인", "체형", "복부", "팔뚝", "허벅지", "힙", "루즈", "와이드", "슬림", "정핏", "세미", "커버"]),
         "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "44", "55", "55반", "66", "66반", "77", "77반", "88", "S", "M", "L", "XL", "허리", "총장"]),
-        "shipping": extract_by_keywords(["배송", "출고", "교환", "반품", "배송비"])
+        "shipping": extract_by_keywords(["배송", "출고", "교환", "반품", "배송비"]),
     }
 
 
@@ -223,7 +224,7 @@ def nearby_label_text(select_tag) -> str:
 def is_bad_option_text(text: str) -> bool:
     bad_keywords = [
         "필수 옵션", "옵션 선택", "선택해주세요", "----", "품절", "SOLD OUT",
-        "LANGUAGE", "SHIPPING TO", "통화", "국가", "배송국가", "배송지", "언어"
+        "LANGUAGE", "SHIPPING TO", "통화", "국가", "배송국가", "배송지", "언어",
     ]
     return any(k.lower() in text.lower() for k in bad_keywords)
 
@@ -241,9 +242,10 @@ def looks_like_size_group(label_text: str, option_texts: list[str]) -> bool:
     label_text_l = label_text.lower()
     if "사이즈" in label_text or "size" in label_text_l:
         return True
+
     size_patterns = [
         r"\b44\b", r"\b55\b", r"55반", r"\b66\b", r"66반", r"\b77\b", r"77반", r"\b88\b",
-        r"\bS\b", r"\bM\b", r"\bL\b", r"\bXL\b", r"\bXXL\b", r"\bFREE\b", r"\bF\b"
+        r"\bS\b", r"\bM\b", r"\bL\b", r"\bXL\b", r"\bXXL\b", r"\bFREE\b", r"\bF\b",
     ]
     return any(re.search(p, joined) for p in size_patterns)
 
@@ -409,6 +411,57 @@ def normalize_size_options(size_options):
     return uniq_keep_order(cleaned)
 
 
+def size_rank_korean(size_text: str):
+    s = clean_text(size_text)
+    order = {
+        "44": 1,
+        "55": 2,
+        "55반": 3,
+        "66": 4,
+        "66반": 5,
+        "77": 6,
+        "77반": 7,
+        "88": 8,
+    }
+    return order.get(s)
+
+
+def extract_max_supported_rank(size_options):
+    """
+    예:
+    - F(55), L(66-66반) -> 66반
+    - 55, 66, 77 -> 77
+    - FREE -> None
+    """
+    if not size_options:
+        return None
+
+    found_ranks = []
+    patterns = ["44", "55반", "55", "66반", "66", "77반", "77", "88"]
+
+    for opt in size_options:
+        text = clean_text(opt)
+        for p in patterns:
+            if p in text:
+                r = size_rank_korean(p)
+                if r is not None:
+                    found_ranks.append(r)
+
+    if not found_ranks:
+        return None
+    return max(found_ranks)
+
+
+def is_user_size_over_product_limit(user_top_size: str, size_options):
+    user_rank = size_rank_korean(user_top_size)
+    max_rank = extract_max_supported_rank(size_options)
+
+    if user_rank is None or max_rank is None:
+        return False, None, None
+
+    return user_rank > max_rank, user_rank, max_rank
+
+
 def detect_free_size(size_options):
     for s in size_options:
         up = s.upper()
@@ -469,25 +522,66 @@ def pick_from_korean(weight, options):
 def recommend_size(height_cm, weight_kg, top_size, size_options):
     options = normalize_size_options(size_options)
     if not options:
-        return {"recommended": None, "reason": ""}
+        return {
+            "recommended": None,
+            "reason": "",
+            "status": "unknown",
+        }
+
+    over_limit, _user_rank, max_rank = is_user_size_over_product_limit(top_size, options)
+    if over_limit:
+        rank_to_label = {
+            1: "44", 2: "55", 3: "55반", 4: "66",
+            5: "66반", 6: "77", 7: "77반", 8: "88",
+        }
+        max_label = rank_to_label.get(max_rank, "")
+        return {
+            "recommended": None,
+            "reason": f"입력하신 상의 사이즈 기준으로는 이 상품이 최대 {max_label}까지만 커버하는 것으로 보여 권장 범위를 넘어요.",
+            "status": "over_limit",
+        }
 
     free_size = detect_free_size(options)
     if free_size:
-        return {"recommended": free_size, "reason": f"이 상품은 {free_size} 기준으로 보시면 돼요."}
+        return {
+            "recommended": free_size,
+            "reason": f"이 상품은 {free_size} 기준으로 보시면 돼요.",
+            "status": "ok",
+        }
 
     weight = try_number(weight_kg)
     if weight is None:
         if top_size:
-            return {"recommended": top_size, "reason": "평소 입으시는 상의 사이즈 기준으로 먼저 보는 쪽이 가장 안전해요."}
-        return {"recommended": None, "reason": ""}
+            return {
+                "recommended": top_size,
+                "reason": "평소 입으시는 상의 사이즈 기준으로 먼저 보는 쪽이 가장 안전해요.",
+                "status": "ok",
+            }
+        return {
+            "recommended": None,
+            "reason": "",
+            "status": "unknown",
+        }
 
     if contains_alpha_sizes(options):
-        return {"recommended": pick_from_alpha(weight, options), "reason": "현재 체형 기준으로 가장 무난하게 보이는 옵션이에요."}
+        return {
+            "recommended": pick_from_alpha(weight, options),
+            "reason": "현재 체형 기준으로 가장 무난하게 보이는 옵션이에요.",
+            "status": "ok",
+        }
 
     if contains_korean_sizes(options):
-        return {"recommended": pick_from_korean(weight, options), "reason": "지금 입력해주신 체형 기준으로 가장 가까운 옵션이에요."}
+        return {
+            "recommended": pick_from_korean(weight, options),
+            "reason": "지금 입력해주신 체형 기준으로 가장 가까운 옵션이에요.",
+            "status": "ok",
+        }
 
-    return {"recommended": None, "reason": ""}
+    return {
+        "recommended": None,
+        "reason": "",
+        "status": "unknown",
+    }
 
 
 def build_body_context() -> dict:
@@ -593,8 +687,14 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
             extra_rules.append("확인된 사이즈 옵션: " + ", ".join(product_context["size_options"]))
 
     size_reco = context_pack.get("size_recommendation") or {}
+
     if size_reco.get("recommended"):
         extra_rules.append(f"추천 사이즈 기준값: {size_reco['recommended']}")
+
+    if size_reco.get("status") == "over_limit":
+        extra_rules.append("사용자 상의 사이즈가 상품 최대 권장 범위를 넘으면 '잘 맞는다', '편하게 맞는다', '추천드린다'라고 말하지 마세요.")
+        extra_rules.append("이 경우 반드시 '권장 범위를 넘는다', '타이트할 수 있다', '더 큰 사이즈 커버 상품이 안전하다' 방향으로 답하세요.")
+        extra_rules.append(f"사이즈 제한 사유: {size_reco.get('reason', '')}")
 
     body_ctx = context_pack.get("body_context") or {}
     if any(body_ctx.values()):
@@ -616,7 +716,7 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
     resp = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=messages,
-        temperature=0.68,
+        temperature=0.45,
         max_tokens=320,
     )
     return resp.choices[0].message.content.strip()
@@ -719,11 +819,7 @@ div[data-testid="stHorizontalBlock"]{
   width:100% !important;
 }
 
-div[data-testid="stHorizontalBlock"] > div{
-  min-width:0 !important;
-  width:100% !important;
-}
-
+div[data-testid="stHorizontalBlock"] > div,
 div[data-testid="column"]{
   min-width:0 !important;
   width:100% !important;
@@ -770,7 +866,6 @@ div[data-baseweb="select"] > div{
   background:var(--miya-input-bg) !important;
 }
 
-/* 상하의 화살표 보이게 강제 */
 div[data-baseweb="select"] svg{
   display:block !important;
   visibility:visible !important;
@@ -779,14 +874,6 @@ div[data-baseweb="select"] svg{
   fill:#111827 !important;
   width:18px !important;
   height:18px !important;
-}
-
-/* 다크모드에서도 화살표는 입력칸 위에 검정색으로 유지 */
-@media (prefers-color-scheme: dark){
-  div[data-baseweb="select"] svg{
-    color:#111827 !important;
-    fill:#111827 !important;
-  }
 }
 
 hr{
@@ -949,6 +1036,11 @@ if any(build_body_context().values()):
 if size_result and size_result.get("recommended"):
     st.markdown(
         f'<div style="margin-top:0; margin-bottom:2px; font-size:10.5px; color:var(--miya-muted);">참고 추천 사이즈: {html.escape(size_result["recommended"])} · {html.escape(size_result["reason"])}</div>',
+        unsafe_allow_html=True,
+    )
+elif size_result and size_result.get("status") == "over_limit":
+    st.markdown(
+        f'<div style="margin-top:0; margin-bottom:2px; font-size:10.5px; color:#dc2626;">사이즈 주의: {html.escape(size_result["reason"])}</div>',
         unsafe_allow_html=True,
     )
 

@@ -4,7 +4,6 @@ import json
 import html
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
 from openai import OpenAI
 
@@ -70,6 +69,8 @@ SYSTEM_PROMPT = """
 - 실제로 확인되지 않은 컬러, 사이즈, 소재는 지어내지 않는다.
 - 현재가 상품 상세페이지라면 절대 '상세페이지에서 다시 문의하세요'라고 말하지 않는다.
 - 상품 정보가 일부 부족해도 현재 페이지 기준으로 최대한 도움 되는 답을 한다.
+- 사용자가 키/체중/상의/하의를 입력했다면 그 정보를 우선 사용한다.
+- 사용자가 체형 정보를 이미 입력했다면 다시 체형을 묻지 않는다.
 """
 
 GENERIC_NAMES = {"미샵", "misharp", "MISHARP", "미샵여성", "Misharp"}
@@ -109,21 +110,6 @@ qp = st.query_params
 current_url = qp_value(qp, "url", "")
 product_no = qp_value(qp, "pn", "")
 product_name_q = qp_value(qp, "pname", "")
-
-# 상단 체형 입력값을 URL 파라미터로 유지
-bh = qp_value(qp, "bh", "")
-bw = qp_value(qp, "bw", "")
-bt = qp_value(qp, "bt", "")
-bb = qp_value(qp, "bb", "")
-
-if bh:
-    st.session_state.body_height = bh
-if bw:
-    st.session_state.body_weight = bw
-if bt in SIZE_OPTIONS_UI:
-    st.session_state.body_top = bt
-if bb in SIZE_OPTIONS_UI:
-    st.session_state.body_bottom = bb
 
 
 def build_context_key(url: str, pn: str, pname: str) -> str:
@@ -637,19 +623,6 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
 
 
 def process_user_message(user_text: str, product_context: dict | None):
-    # 채팅 입력 직전에 세션값을 URL 파라미터 기준으로 한 번 더 동기화
-    latest_bh = qp_value(st.query_params, "bh", st.session_state.body_height)
-    latest_bw = qp_value(st.query_params, "bw", st.session_state.body_weight)
-    latest_bt = qp_value(st.query_params, "bt", st.session_state.body_top)
-    latest_bb = qp_value(st.query_params, "bb", st.session_state.body_bottom)
-
-    st.session_state.body_height = latest_bh
-    st.session_state.body_weight = latest_bw
-    if latest_bt in SIZE_OPTIONS_UI:
-        st.session_state.body_top = latest_bt
-    if latest_bb in SIZE_OPTIONS_UI:
-        st.session_state.body_bottom = latest_bb
-
     st.session_state.messages.append({"role": "user", "content": user_text})
 
     fast = get_fast_policy_answer(user_text)
@@ -659,178 +632,6 @@ def process_user_message(user_text: str, product_context: dict | None):
 
     answer = get_llm_answer(user_text, product_context)
     st.session_state.messages.append({"role": "assistant", "content": answer})
-
-
-def render_size_input_component(height_val: str, weight_val: str, top_val: str, bottom_val: str):
-    top_opts = "".join(
-        f'<option value="{html.escape(x)}" {"selected" if x == top_val else ""}>{html.escape(x or "선택")}</option>'
-        for x in SIZE_OPTIONS_UI
-    )
-    bottom_opts = "".join(
-        f'<option value="{html.escape(x)}" {"selected" if x == bottom_val else ""}>{html.escape(x or "선택")}</option>'
-        for x in SIZE_OPTIONS_UI
-    )
-
-    comp_html = f"""
-    <!doctype html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1" />
-      <style>
-        * {{
-          box-sizing: border-box;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        }}
-        html, body {{
-          margin: 0;
-          padding: 0;
-          background: transparent;
-          overflow: hidden;
-        }}
-        .wrap {{
-          width: 100%;
-          margin: 0;
-          padding: 0;
-        }}
-        .grid {{
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 8px 8px;
-          width: 100%;
-          margin: 0;
-          padding: 0;
-          align-items: start;
-        }}
-        .field {{
-          min-width: 0;
-        }}
-        .label {{
-          display: block;
-          margin: 0 0 4px 0;
-          font-size: 10.5px;
-          line-height: 1.15;
-          font-weight: 700;
-          color: #303443;
-          height: 14px;
-        }}
-        .input, .select {{
-          width: 100%;
-          height: 40px;
-          border: 1px solid rgba(0,0,0,.05);
-          border-radius: 12px;
-          background: #f3f5f8;
-          color: #303443;
-          font-size: 14px;
-          padding: 0 12px;
-          outline: none;
-          min-width: 0;
-          box-shadow: none;
-          display: block;
-          line-height: 40px;
-        }}
-        .select {{
-          appearance: none;
-          -webkit-appearance: none;
-          background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 20 20' fill='none'><path d='M5 7.5L10 12.5L15 7.5' stroke='%23303443' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/></svg>");
-          background-repeat: no-repeat;
-          background-position: right 10px center;
-          padding-right: 30px;
-          line-height: normal;
-        }}
-        .hint {{
-          margin-top: 6px;
-          font-size: 10px;
-          line-height: 1.2;
-          color: #7a7f8c;
-        }}
-        @media (max-width: 768px) {{
-          .grid {{
-            grid-template-columns: 1fr 1fr !important;
-            gap: 7px 7px !important;
-          }}
-          .label {{
-            font-size: 10px;
-            height: 14px;
-          }}
-          .input, .select {{
-            height: 40px;
-            font-size: 13px;
-            padding-left: 10px;
-            padding-right: 10px;
-          }}
-          .select {{
-            padding-right: 28px;
-            background-position: right 9px center;
-          }}
-        }}
-      </style>
-    </head>
-    <body>
-      <div class="wrap">
-        <div class="grid">
-          <div class="field">
-            <label class="label">키</label>
-            <input id="bh" class="input" type="text" placeholder="cm" value="{html.escape(height_val)}" />
-          </div>
-          <div class="field">
-            <label class="label">체중</label>
-            <input id="bw" class="input" type="text" placeholder="kg" value="{html.escape(weight_val)}" />
-          </div>
-          <div class="field">
-            <label class="label">상의</label>
-            <select id="bt" class="select">{top_opts}</select>
-          </div>
-          <div class="field">
-            <label class="label">하의</label>
-            <select id="bb" class="select">{bottom_opts}</select>
-          </div>
-        </div>
-        <div class="hint">입력 후 바로 상담에 반영돼요.</div>
-      </div>
-
-      <script>
-        let timer = null;
-
-        function applyValues() {{
-          const bh = document.getElementById("bh").value || "";
-          const bw = document.getElementById("bw").value || "";
-          const bt = document.getElementById("bt").value || "";
-          const bb = document.getElementById("bb").value || "";
-
-          try {{
-            const url = new URL(window.parent.location.href);
-            url.searchParams.set("bh", bh);
-            url.searchParams.set("bw", bw);
-            url.searchParams.set("bt", bt);
-            url.searchParams.set("bb", bb);
-            window.parent.location.replace(url.toString());
-          }} catch (e) {{
-            console.error(e);
-          }}
-        }}
-
-        function scheduleApply() {{
-          clearTimeout(timer);
-          timer = setTimeout(applyValues, 350);
-        }}
-
-        const bhEl = document.getElementById("bh");
-        const bwEl = document.getElementById("bw");
-        const btEl = document.getElementById("bt");
-        const bbEl = document.getElementById("bb");
-
-        bhEl.addEventListener("input", scheduleApply);
-        bwEl.addEventListener("input", scheduleApply);
-        bhEl.addEventListener("blur", applyValues);
-        bwEl.addEventListener("blur", applyValues);
-
-        btEl.addEventListener("change", applyValues);
-        bbEl.addEventListener("change", applyValues);
-      </script>
-    </body>
-    </html>
-    """
-    components.html(comp_html, height=142, scrolling=False)
 
 
 context_key = build_context_key(current_url, product_no, product_name_q)
@@ -860,38 +661,96 @@ div[data-testid="stToolbar"] {display:none;}
 #MainMenu {visibility:hidden;}
 footer {visibility:hidden;}
 
-.block-container{
-  max-width:760px;
-  padding-top:0.5rem !important;
-  padding-bottom:10.4rem !important;
-  padding-left:14px !important;
-  padding-right:14px !important;
-}
-
 :root{
-  --miya-accent:#0f6a63;
+  --miya-page-bg:#ffffff;
   --miya-title:#303443;
   --miya-sub:#5f6471;
   --miya-muted:#7a7f8c;
   --miya-divider:#d8dbe2;
+  --miya-card-bg:transparent;
   --miya-bot-bg:#071b4e;
+  --miya-bot-text:#ffffff;
   --miya-user-bg:#dff0ec;
   --miya-user-text:#1f3b36;
+  --miya-label:#303443;
+  --miya-input-text:#303443;
+}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --miya-page-bg:#0b1220;
+    --miya-title:#f3f4f6;
+    --miya-sub:#d1d5db;
+    --miya-muted:#c0c7d1;
+    --miya-divider:rgba(255,255,255,.14);
+    --miya-card-bg:transparent;
+    --miya-bot-bg:#0b2a78;
+    --miya-bot-text:#ffffff;
+    --miya-user-bg:#dff0ec;
+    --miya-user-text:#173630;
+    --miya-label:#f3f4f6;
+    --miya-input-text:#0f172a;
+  }
+}
+
+.stApp{
+  background:var(--miya-page-bg) !important;
+}
+
+.block-container{
+  max-width:760px;
+  padding-top:0.6rem !important;
+  padding-bottom:10.2rem !important;
+  padding-left:14px !important;
+  padding-right:14px !important;
+}
+
+div[data-testid="column"]{
+  min-width:0 !important;
+}
+
+div[data-testid="stHorizontalBlock"]{
+  gap:8px !important;
+  flex-wrap:nowrap !important;
+}
+
+div[data-testid="stTextInput"],
+div[data-testid="stSelectbox"]{
+  margin-bottom:-2px !important;
+}
+
+div[data-testid="stTextInput"] label,
+div[data-testid="stSelectbox"] label{
+  color:var(--miya-label) !important;
+  font-weight:700 !important;
+  font-size:11px !important;
+  line-height:1.15 !important;
+  margin-bottom:3px !important;
+}
+
+div[data-testid="stTextInput"] input{
+  border-radius:12px !important;
+  min-width:0 !important;
+  padding-left:12px !important;
+  padding-right:12px !important;
+  color:var(--miya-input-text) !important;
+}
+
+div[data-baseweb="select"]{
+  min-width:0 !important;
+}
+
+div[data-baseweb="select"] > div{
+  border-radius:12px !important;
+  min-width:0 !important;
+  padding-right:30px !important;
+  color:var(--miya-input-text) !important;
 }
 
 hr{
   margin-top:6px !important;
   margin-bottom:6px !important;
   border-color:var(--miya-divider) !important;
-}
-
-iframe[title="streamlit-component"]{
-  width:100% !important;
-  display:block !important;
-  margin:0 !important;
-  padding:0 !important;
-  border:0 !important;
-  background:transparent !important;
 }
 
 div[data-testid="stChatInput"]{
@@ -912,6 +771,24 @@ div[data-testid="stChatInput"]{
     padding-right:12px !important;
   }
 
+  div[data-testid="stHorizontalBlock"]{
+    gap:6px !important;
+  }
+
+  div[data-testid="stTextInput"] input{
+    padding-left:10px !important;
+    padding-right:10px !important;
+  }
+
+  div[data-baseweb="select"] > div{
+    padding-right:26px !important;
+  }
+
+  div[data-testid="stTextInput"] label,
+  div[data-testid="stSelectbox"] label{
+    font-size:10.5px !important;
+  }
+
   div[data-testid="stChatInput"]{
     position:sticky !important;
     left:auto !important;
@@ -928,12 +805,12 @@ div[data-testid="stChatInput"]{
 )
 
 st.markdown(
-    """
+    f"""
     <div style="text-align:center; margin:0 0 8px 0;">
-      <div style="font-size:31px; font-weight:800; line-height:1.08; letter-spacing:-0.02em; color:#303443;">
-        미샵 쇼핑친구 <span style="color:#0f6a63;">미야언니</span>
+      <div style="font-size:31px; font-weight:800; line-height:1.08; letter-spacing:-0.02em; color:var(--miya-title);">
+        미샵 쇼핑친구 <span style="color:#0f8a7a;">미야언니</span>
       </div>
-      <div style="margin-top:4px; font-size:13px; line-height:1.3; color:#5f6471;">
+      <div style="margin-top:4px; font-size:13px; line-height:1.3; color:var(--miya-sub);">
         24시간 쇼핑 판단에 도움을 드리는 똑똑한 쇼핑친구
       </div>
     </div>
@@ -943,34 +820,63 @@ st.markdown(
 
 st.markdown(
     """
-    <div style="margin-top:0; margin-bottom:0;">
-      <div style="font-size:13px; font-weight:700; line-height:1.2; color:#303443; margin-bottom:3px;">
-        사이즈 입력 <span style="font-size:11px; font-weight:500; color:#7a7f8c;">(더 구체적인 상담 가능)</span>
+    <div style="margin-top:0; margin-bottom:2px;">
+      <div style="font-size:13px; font-weight:700; line-height:1.2; color:var(--miya-title); margin-bottom:4px;">
+        사이즈 입력 <span style="font-size:11px; font-weight:500; color:var(--miya-muted);">(더 구체적인 상담 가능)</span>
       </div>
-      <div style="padding:2px 0 0 0; border:none; border-radius:0; background:transparent;">
     """,
     unsafe_allow_html=True,
 )
 
-render_size_input_component(
-    st.session_state.body_height,
-    st.session_state.body_weight,
-    st.session_state.body_top,
-    st.session_state.body_bottom,
-)
+row1 = st.columns(2, gap="small")
+with row1[0]:
+    st.session_state.body_height = st.text_input(
+        "키",
+        value=st.session_state.body_height,
+        placeholder="cm",
+        key="body_height_input",
+    )
+with row1[1]:
+    st.session_state.body_weight = st.text_input(
+        "체중",
+        value=st.session_state.body_weight,
+        placeholder="kg",
+        key="body_weight_input",
+    )
 
-st.markdown("</div></div>", unsafe_allow_html=True)
+row2 = st.columns(2, gap="small")
+with row2[0]:
+    current_top = st.session_state.body_top if st.session_state.body_top in SIZE_OPTIONS_UI else ""
+    st.session_state.body_top = st.selectbox(
+        "상의",
+        options=SIZE_OPTIONS_UI,
+        index=SIZE_OPTIONS_UI.index(current_top),
+        key="body_top_input",
+    )
+with row2[1]:
+    current_bottom = st.session_state.body_bottom if st.session_state.body_bottom in SIZE_OPTIONS_UI else ""
+    st.session_state.body_bottom = st.selectbox(
+        "하의",
+        options=SIZE_OPTIONS_UI,
+        index=SIZE_OPTIONS_UI.index(current_bottom),
+        key="body_bottom_input",
+    )
+
+st.markdown(
+    '<div style="margin-top:4px; font-size:10px; line-height:1.2; color:var(--miya-muted);">입력 후 바로 상담에 반영돼요.</div></div>',
+    unsafe_allow_html=True,
+)
 
 body_summary = build_body_context_text(build_body_context())
 if any(build_body_context().values()):
     st.markdown(
-        f'<div style="margin-top:0; margin-bottom:2px; font-size:10.5px; color:#7a7f8c;">현재 입력 정보: {html.escape(body_summary)}</div>',
+        f'<div style="margin-top:2px; margin-bottom:2px; font-size:10.5px; color:var(--miya-muted);">현재 입력 정보: {html.escape(body_summary)}</div>',
         unsafe_allow_html=True,
     )
 
 if size_result and size_result.get("recommended"):
     st.markdown(
-        f'<div style="margin-top:0; margin-bottom:2px; font-size:10.5px; color:#7a7f8c;">참고 추천 사이즈: {html.escape(size_result["recommended"])} · {html.escape(size_result["reason"])}</div>',
+        f'<div style="margin-top:0; margin-bottom:2px; font-size:10.5px; color:var(--miya-muted);">참고 추천 사이즈: {html.escape(size_result["recommended"])} · {html.escape(size_result["reason"])}</div>',
         unsafe_allow_html=True,
     )
 
@@ -1002,8 +908,8 @@ for msg in st.session_state.messages:
             (
                 '<div style="display:flex; justify-content:flex-end; width:100%; margin:2px 0 4px 0;">'
                 '<div style="max-width:92%;">'
-                '<div style="display:block; font-size:12px; font-weight:700; line-height:1.15; color:#0f6a63; text-align:right; margin:0 6px 1px 0;">고객님</div>'
-                f'<div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.52; white-space:pre-wrap; word-break:keep-all; background:#dff0ec; color:#1f3b36; border:1px solid rgba(15,106,99,.14);">{safe_text}</div>'
+                '<div style="display:block; font-size:12px; font-weight:700; line-height:1.15; color:#0f8a7a; text-align:right; margin:0 6px 1px 0;">고객님</div>'
+                f'<div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-right-radius:6px; font-size:15px; line-height:1.52; white-space:pre-wrap; word-break:keep-all; background:var(--miya-user-bg); color:var(--miya-user-text); border:1px solid rgba(15,106,99,.14);">{safe_text}</div>'
                 '</div>'
                 '</div>'
             ),
@@ -1014,8 +920,8 @@ for msg in st.session_state.messages:
             (
                 '<div style="display:flex; justify-content:flex-start; width:100%; margin:2px 0 4px 0;">'
                 '<div style="max-width:92%;">'
-                '<div style="display:block; font-size:12px; font-weight:700; line-height:1.15; color:#5f6471; margin:0 0 1px 6px;">미야언니</div>'
-                f'<div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.52; white-space:pre-wrap; word-break:keep-all; background:#071b4e; color:#ffffff; border:1px solid rgba(255,255,255,.08);">{safe_text}</div>'
+                '<div style="display:block; font-size:12px; font-weight:700; line-height:1.15; color:var(--miya-sub); margin:0 0 1px 6px;">미야언니</div>'
+                f'<div style="padding:10px 14px 10px 10px; border-radius:18px; border-bottom-left-radius:6px; font-size:15px; line-height:1.52; white-space:pre-wrap; word-break:keep-all; background:var(--miya-bot-bg); color:var(--miya-bot-text); border:1px solid rgba(255,255,255,.08);">{safe_text}</div>'
                 '</div>'
                 '</div>'
             ),

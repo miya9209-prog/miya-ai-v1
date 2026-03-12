@@ -75,9 +75,9 @@ GENERIC_NAMES = {"미샵", "misharp", "MISHARP", "미샵여성", "Misharp"}
 COLOR_HINTS = [
     "블랙", "아이보리", "크림", "화이트", "베이지", "오트밀", "그레이", "차콜",
     "네이비", "블루", "소라", "카키", "브라운", "핑크", "레드", "와인",
-    "버건디", "퍼플", "민트", "옐로우"
+    "버건디", "퍼플", "민트", "옐로우", "청", "중청", "연청", "진청"
 ]
-SIZE_OPTIONS = ["", "44", "55", "55반", "66", "66반", "77", "77반", "88"]
+SIZE_OPTIONS_UI = ["", "44", "55", "55반", "66", "66반", "77", "77반", "88"]
 
 
 def ensure_state():
@@ -96,10 +96,18 @@ def ensure_state():
 
 ensure_state()
 
+
+def qp_value(qp, key, default=""):
+    value = qp.get(key, default)
+    if isinstance(value, list):
+        return value[0] if value else default
+    return value or default
+
+
 qp = st.query_params
-current_url = qp.get("url", "") or ""
-product_no = qp.get("pn", "") or ""
-product_name_q = qp.get("pname", "") or ""
+current_url = qp_value(qp, "url", "")
+product_no = qp_value(qp, "pn", "")
+product_name_q = qp_value(qp, "pname", "")
 
 
 def build_context_key(url: str, pn: str, pname: str) -> str:
@@ -107,14 +115,9 @@ def build_context_key(url: str, pn: str, pname: str) -> str:
 
 
 def is_product_page(url: str, pn: str) -> bool:
-    url = (url or "").lower()
-    return ("/product/detail" in url) or ("product_no=" in url) or bool((pn or "").strip())
-
-
-context_key = build_context_key(current_url, product_no, product_name_q)
-if context_key != st.session_state.last_context_key:
-    st.session_state.last_context_key = context_key
-    st.session_state.messages = []
+    url_l = (url or "").lower()
+    pn = (pn or "").strip()
+    return ("/product/detail" in url_l) or ("product_no=" in url_l) or bool(pn)
 
 
 def clean_text(text: str) -> str:
@@ -123,9 +126,28 @@ def clean_text(text: str) -> str:
     return re.sub(r"\s+", " ", str(text)).strip()
 
 
+def normalize_product_name(name: str) -> str:
+    name = clean_text(name)
+    name = re.sub(r"\s*\|\s*.*$", "", name)
+    name = re.sub(r"\s*-\s*미샵.*$", "", name, flags=re.I)
+    name = re.sub(r"\s*-\s*MISHARP.*$", "", name, flags=re.I)
+    return clean_text(name)
+
+
 def is_generic_name(name: str) -> bool:
     name = clean_text(name)
     return (not name) or (name in GENERIC_NAMES) or len(name) <= 2
+
+
+def uniq_keep_order(items):
+    out = []
+    seen = set()
+    for item in items:
+        item = clean_text(item)
+        if item and item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
 
 
 def try_number(value: str):
@@ -139,17 +161,6 @@ def try_number(value: str):
         return float(m.group(0))
     except ValueError:
         return None
-
-
-def uniq_keep_order(items):
-    seen = set()
-    out = []
-    for item in items:
-        item = clean_text(item)
-        if item and item not in seen:
-            seen.add(item)
-            out.append(item)
-    return out
 
 
 def guess_category(name: str, text: str) -> str:
@@ -170,14 +181,6 @@ def guess_category(name: str, text: str) -> str:
         if any(k in corpus for k in keywords):
             return cat
     return "기타"
-
-
-def normalize_product_name(name: str) -> str:
-    name = clean_text(name)
-    name = re.sub(r"\s*\|\s*.*$", "", name)
-    name = re.sub(r"\s*-\s*미샵.*$", "", name, flags=re.I)
-    name = re.sub(r"\s*-\s*MISHARP.*$", "", name, flags=re.I)
-    return clean_text(name)
 
 
 def split_sections(text: str) -> dict:
@@ -204,6 +207,99 @@ def split_sections(text: str) -> dict:
     }
 
 
+def nearby_label_text(select_tag) -> str:
+    pieces = []
+
+    prev_label = select_tag.find_previous(["label", "th", "dt", "strong", "span"])
+    if prev_label:
+        pieces.append(prev_label.get_text(" ", strip=True))
+
+    parent = select_tag.parent
+    if parent:
+        pieces.append(parent.get_text(" ", strip=True)[:200])
+
+    return clean_text(" ".join(pieces))
+
+
+def is_bad_option_text(text: str) -> bool:
+    bad_keywords = [
+        "필수 옵션", "옵션 선택", "선택해주세요", "----", "품절", "SOLD OUT",
+        "LANGUAGE", "SHIPPING TO", "통화", "국가", "배송국가", "배송지", "언어"
+    ]
+    return any(k.lower() in text.lower() for k in bad_keywords)
+
+
+def looks_like_color_group(label_text: str, option_texts: list[str]) -> bool:
+    joined = " ".join(option_texts)
+    label_text = label_text.lower()
+    if "컬러" in label_text or "color" in label_text or "색상" in label_text:
+        return True
+    return any(color in joined for color in COLOR_HINTS)
+
+
+def looks_like_size_group(label_text: str, option_texts: list[str]) -> bool:
+    joined = " ".join(option_texts).upper()
+    label_text_l = label_text.lower()
+
+    if "사이즈" in label_text or "size" in label_text_l:
+        return True
+
+    size_patterns = [
+        r"\b44\b", r"\b55\b", r"55반", r"\b66\b", r"66반", r"\b77\b", r"77반", r"\b88\b",
+        r"\bS\b", r"\bM\b", r"\bL\b", r"\bXL\b", r"\bXXL\b", r"\bFREE\b", r"\bF\b"
+    ]
+    return any(re.search(p, joined) for p in size_patterns)
+
+
+def extract_option_groups(soup: BeautifulSoup):
+    groups = []
+
+    for sel in soup.select("select"):
+        name_attr = clean_text(sel.get("name", ""))
+        id_attr = clean_text(sel.get("id", ""))
+        cls_attr = " ".join(sel.get("class", []))
+        meta = f"{name_attr} {id_attr} {cls_attr}".lower()
+
+        if any(bad in meta for bad in ["quantity", "qty", "language", "shipping", "country", "currency"]):
+            continue
+
+        option_texts = []
+        for opt in sel.select("option"):
+            if opt.has_attr("disabled"):
+                continue
+            val = clean_text(opt.get("value", ""))
+            txt = clean_text(opt.get_text(" ", strip=True))
+            if not txt:
+                continue
+            if not val and is_bad_option_text(txt):
+                continue
+            if is_bad_option_text(txt):
+                continue
+            if len(txt) > 80:
+                continue
+            option_texts.append(txt)
+
+        option_texts = uniq_keep_order(option_texts)
+        if not option_texts:
+            continue
+
+        label_text = nearby_label_text(sel)
+
+        group_type = None
+        if looks_like_color_group(label_text, option_texts):
+            group_type = "color"
+        elif looks_like_size_group(label_text, option_texts):
+            group_type = "size"
+
+        groups.append({
+            "type": group_type,
+            "label": label_text,
+            "options": option_texts,
+        })
+
+    return groups
+
+
 def extract_color_candidates(text: str):
     found = []
     corpus = clean_text(text)
@@ -213,23 +309,6 @@ def extract_color_candidates(text: str):
     return uniq_keep_order(found)
 
 
-def extract_select_options(soup: BeautifulSoup):
-    selects = soup.select("select")
-    all_options = []
-    for sel in selects:
-        opts = []
-        for opt in sel.select("option"):
-            text = clean_text(opt.get_text(" ", strip=True))
-            if not text:
-                continue
-            if any(bad in text for bad in ["필수 옵션", "옵션 선택", "선택해주세요", "품절", "----"]):
-                continue
-            opts.append(text)
-        if opts:
-            all_options.append(uniq_keep_order(opts))
-    return all_options
-
-
 def fetch_product_context(url: str, passed_name: str = "") -> dict | None:
     if not url:
         return None
@@ -237,11 +316,10 @@ def fetch_product_context(url: str, passed_name: str = "") -> dict | None:
     headers = {"User-Agent": "Mozilla/5.0"}
     r = requests.get(url, headers=headers, timeout=12)
     r.raise_for_status()
-
     soup = BeautifulSoup(r.text, "html.parser")
 
-    name = normalize_product_name(passed_name)
-    if is_generic_name(name):
+    product_name = normalize_product_name(passed_name)
+    if is_generic_name(product_name):
         for selector in [
             "#span_product_name",
             "#span_product_name_mobile",
@@ -256,15 +334,24 @@ def fetch_product_context(url: str, passed_name: str = "") -> dict | None:
             if el:
                 candidate = normalize_product_name(el.get_text(" ", strip=True))
                 if not is_generic_name(candidate):
-                    name = candidate
+                    product_name = candidate
                     break
 
-    if is_generic_name(name):
-        name = "지금 보시는 상품"
+    if is_generic_name(product_name):
+        product_name = "지금 보시는 상품"
 
-    option_groups = extract_select_options(soup)
-    color_options = option_groups[0] if len(option_groups) >= 1 else []
-    size_options = option_groups[1] if len(option_groups) >= 2 else []
+    option_groups = extract_option_groups(soup)
+    color_options = []
+    size_options = []
+
+    for group in option_groups:
+        if group["type"] == "color":
+            color_options.extend(group["options"])
+        elif group["type"] == "size":
+            size_options.extend(group["options"])
+
+    color_options = uniq_keep_order(color_options)
+    size_options = uniq_keep_order(size_options)
 
     for tag in soup(["script", "style", "noscript"]):
         tag.decompose()
@@ -272,13 +359,13 @@ def fetch_product_context(url: str, passed_name: str = "") -> dict | None:
     raw_text = soup.get_text("\n")
     raw_text = re.sub(r"\n{3,}", "\n\n", raw_text).strip()
     sections = split_sections(raw_text)
-    category = guess_category(name, raw_text)
+    category = guess_category(product_name, raw_text)
 
     if not color_options:
         color_options = extract_color_candidates(raw_text)
 
     return {
-        "product_name": name,
+        "product_name": product_name,
         "category": category,
         "summary": sections["summary"],
         "material": sections["material"],
@@ -319,7 +406,10 @@ def normalize_size_options(size_options):
         s = clean_text(s)
         if not s:
             continue
-        if any(bad in s for bad in ["필수", "선택", "품절"]):
+        up = s.upper()
+        if any(bad in up for bad in ["LANGUAGE", "SHIPPING TO", "COUNTRY", "배송지", "언어", "컬러", "COLOR"]):
+            continue
+        if len(s) > 30:
             continue
         cleaned.append(s)
     return uniq_keep_order(cleaned)
@@ -335,7 +425,7 @@ def detect_free_size(size_options):
 
 def contains_alpha_sizes(size_options):
     joined = " ".join(size_options).upper()
-    return any(token in joined for token in [" S", " M", " L", " XL", "XXL"]) or any(x in size_options for x in ["S", "M", "L", "XL", "XXL"])
+    return any(re.search(rf"\b{x}\b", joined) for x in ["S", "M", "L", "XL", "XXL"])
 
 
 def contains_korean_sizes(size_options):
@@ -385,7 +475,7 @@ def pick_from_korean(weight, options):
 def recommend_size(height_cm, weight_kg, top_size, size_options):
     options = normalize_size_options(size_options)
     if not options:
-        return {"recommended": None, "reason": "옵션 정보가 없어 사이즈를 딱 잘라 말하긴 어려워요."}
+        return {"recommended": None, "reason": ""}
 
     free_size = detect_free_size(options)
     if free_size:
@@ -394,8 +484,8 @@ def recommend_size(height_cm, weight_kg, top_size, size_options):
     weight = try_number(weight_kg)
     if weight is None:
         if top_size:
-            return {"recommended": top_size, "reason": "평소 입으시는 상의 사이즈 기준으로 먼저 보시는 쪽이 가장 안전해요."}
-        return {"recommended": options[0], "reason": "체형 정보가 적어서 가장 기본 옵션부터 보는 게 무난해요."}
+            return {"recommended": top_size, "reason": "평소 입으시는 상의 사이즈 기준으로 먼저 보는 쪽이 가장 안전해요."}
+        return {"recommended": None, "reason": ""}
 
     if contains_alpha_sizes(options):
         return {"recommended": pick_from_alpha(weight, options), "reason": "현재 체형 기준으로 가장 무난하게 보이는 옵션이에요."}
@@ -403,7 +493,7 @@ def recommend_size(height_cm, weight_kg, top_size, size_options):
     if contains_korean_sizes(options):
         return {"recommended": pick_from_korean(weight, options), "reason": "지금 입력해주신 체형 기준으로 가장 가까운 옵션이에요."}
 
-    return {"recommended": options[0], "reason": "옵션명이 일반형이 아니라 첫 번째 유효 옵션 기준으로 봐주시는 게 좋아요."}
+    return {"recommended": None, "reason": ""}
 
 
 def build_body_context() -> dict:
@@ -465,12 +555,15 @@ def get_fast_policy_answer(user_text: str) -> str | None:
 def build_context_pack(product_context: dict | None):
     body_context = build_body_context()
     is_detail = is_product_page(current_url, product_no)
-    size_reco = recommend_size(
-        body_context.get("height_cm", ""),
-        body_context.get("weight_kg", ""),
-        body_context.get("top_size", ""),
-        (product_context or {}).get("size_options", []),
-    ) if product_context else None
+
+    size_reco = None
+    if product_context:
+        size_reco = recommend_size(
+            body_context.get("height_cm", ""),
+            body_context.get("weight_kg", ""),
+            body_context.get("top_size", ""),
+            product_context.get("size_options", []),
+        )
 
     return {
         "policy_db": POLICY_DB,
@@ -494,18 +587,20 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
         extra_rules.append("현재는 상품 상세페이지 기준 상담입니다. 현재 페이지 기준으로 바로 답하세요.")
         extra_rules.append("상세페이지에서 다시 눌러달라는 말은 하지 마세요.")
     else:
-        extra_rules.append("현재는 일반 유입일 수 있습니다. 상품 정보가 부족하면 자연스럽게 현재 보고 계신 상품 기준으로 다시 물어봐 달라고 짧게 안내할 수 있습니다.")
+        extra_rules.append("현재는 일반 유입일 수 있습니다. 상품 정보가 부족하면 현재 보고 계신 상품 기준으로 물어보면 더 정확하다고 아주 짧게만 안내할 수 있습니다.")
 
     if product_context:
-        if product_context.get("product_name") and product_context.get("product_name") != "지금 보시는 상품":
-            extra_rules.append(f"현재 상품명 후보: {product_context['product_name']}")
+        pname = product_context.get("product_name", "")
+        if pname and pname != "지금 보시는 상품":
+            extra_rules.append(f"현재 상품명 후보: {pname}")
         if product_context.get("color_options"):
             extra_rules.append("확인된 컬러 후보: " + ", ".join(product_context["color_options"]))
         if product_context.get("size_options"):
             extra_rules.append("확인된 사이즈 옵션: " + ", ".join(product_context["size_options"]))
 
-    if context_pack.get("size_recommendation", {}).get("recommended"):
-        extra_rules.append(f"추천 사이즈 기준값: {context_pack['size_recommendation']['recommended']}")
+    size_reco = context_pack.get("size_recommendation") or {}
+    if size_reco.get("recommended"):
+        extra_rules.append(f"추천 사이즈 기준값: {size_reco['recommended']}")
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -523,7 +618,7 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
         model="gpt-4.1-mini",
         messages=messages,
         temperature=0.68,
-        max_tokens=300,
+        max_tokens=320,
     )
     return resp.choices[0].message.content.strip()
 
@@ -537,17 +632,27 @@ def process_user_message(user_text: str, product_context: dict | None):
         return
 
     answer = get_llm_answer(user_text, product_context)
-    st.session_state.messages.append({"role": "assistant", "content": answer})
+    st.session_state.messages.append({"role": "assistant", "content": answer)
 
 
-product_context = fetch_product_context_cached(current_url, product_name_q) if current_url else None
+context_key = build_context_key(current_url, product_no, product_name_q)
+if context_key != st.session_state.last_context_key:
+    st.session_state.last_context_key = context_key
+    st.session_state.messages = []
+
+product_context = None
+if current_url and is_product_page(current_url, product_no):
+    product_context = fetch_product_context_cached(current_url, product_name_q)
+
 body_ctx = build_body_context()
-size_result = recommend_size(
-    body_ctx.get("height_cm", ""),
-    body_ctx.get("weight_kg", ""),
-    body_ctx.get("top_size", ""),
-    (product_context or {}).get("size_options", []),
-) if product_context else None
+size_result = None
+if product_context:
+    size_result = recommend_size(
+        body_ctx.get("height_cm", ""),
+        body_ctx.get("weight_kg", ""),
+        body_ctx.get("top_size", ""),
+        product_context.get("size_options", []),
+    )
 
 st.markdown(
     """
@@ -559,8 +664,8 @@ footer {visibility:hidden;}
 
 .block-container{
   max-width:760px;
-  padding-top:0.38rem !important;
-  padding-bottom:10.5rem !important;
+  padding-top:0.35rem !important;
+  padding-bottom:10.2rem !important;
 }
 
 :root{
@@ -611,8 +716,8 @@ div[data-testid="stChatInput"]{
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
-    padding-top:0.65rem !important;
-    padding-bottom:9.8rem !important;
+    padding-top:0.62rem !important;
+    padding-bottom:9.6rem !important;
   }
 
   div[data-testid="stHorizontalBlock"]{
@@ -677,19 +782,19 @@ with row1[1]:
 
 row2 = st.columns(2, gap="small")
 with row2[0]:
-    current_top = st.session_state.body_top if st.session_state.body_top in SIZE_OPTIONS else ""
+    current_top = st.session_state.body_top if st.session_state.body_top in SIZE_OPTIONS_UI else ""
     st.session_state.body_top = st.selectbox(
         "상의",
-        options=SIZE_OPTIONS,
-        index=SIZE_OPTIONS.index(current_top),
+        options=SIZE_OPTIONS_UI,
+        index=SIZE_OPTIONS_UI.index(current_top),
         key="body_top_input",
     )
 with row2[1]:
-    current_bottom = st.session_state.body_bottom if st.session_state.body_bottom in SIZE_OPTIONS else ""
+    current_bottom = st.session_state.body_bottom if st.session_state.body_bottom in SIZE_OPTIONS_UI else ""
     st.session_state.body_bottom = st.selectbox(
         "하의",
-        options=SIZE_OPTIONS,
-        index=SIZE_OPTIONS.index(current_bottom),
+        options=SIZE_OPTIONS_UI,
+        index=SIZE_OPTIONS_UI.index(current_bottom),
         key="body_bottom_input",
     )
 

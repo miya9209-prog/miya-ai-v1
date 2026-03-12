@@ -427,12 +427,6 @@ def size_rank_korean(size_text: str):
 
 
 def extract_max_supported_rank(size_options):
-    """
-    예:
-    - F(55), L(66-66반) -> 66반
-    - 55, 66, 77 -> 77
-    - FREE -> None
-    """
     if not size_options:
         return None
 
@@ -640,6 +634,42 @@ def get_fast_policy_answer(user_text: str) -> str | None:
     return None
 
 
+def is_size_question(user_text: str) -> bool:
+    t = clean_text(user_text).replace(" ", "")
+    keywords = [
+        "사이즈", "맞을까", "맞나요", "맞아", "커요", "작아요", "타이트", "여유",
+        "추천해", "추천", "몇사이즈", "어떤사이즈", "m이", "l이", "free", "f사이즈",
+    ]
+    return any(k in t for k in keywords)
+
+
+def build_hard_size_answer(product_context: dict | None):
+    if not product_context:
+        return None
+
+    body_ctx = build_body_context()
+    top_size = clean_text(body_ctx.get("top_size", ""))
+    size_options = product_context.get("size_options", []) or []
+
+    over_limit, _user_rank, max_rank = is_user_size_over_product_limit(top_size, size_options)
+    if not over_limit:
+        return None
+
+    rank_to_label = {
+        1: "44", 2: "55", 3: "55반", 4: "66",
+        5: "66반", 6: "77", 7: "77반", 8: "88",
+    }
+    max_label = rank_to_label.get(max_rank, "")
+    option_text = ", ".join(size_options) if size_options else f"최대 {max_label}"
+
+    return (
+        f"입력하신 상의 {top_size} 기준이면 이 상품은 페이지상 {option_text}까지라 "
+        f"여유 있게 맞는다고 보긴 어려워요.\n"
+        f"최대 권장 범위가 {max_label}까지로 보여서 타이트할 수 있고, "
+        f"편안함 우선이면 77 이상 커버되는 상의를 보시는 쪽이 더 안전해요."
+    )
+
+
 def build_context_pack(product_context: dict | None):
     body_context = build_body_context()
     is_detail = is_product_page(current_url, product_no)
@@ -716,7 +746,7 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
     resp = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=messages,
-        temperature=0.45,
+        temperature=0.2,
         max_tokens=320,
     )
     return resp.choices[0].message.content.strip()
@@ -729,6 +759,13 @@ def process_user_message(user_text: str, product_context: dict | None):
     if fast:
         st.session_state.messages.append({"role": "assistant", "content": fast})
         return
+
+    # 핵심: 사이즈 질문이면 LLM보다 먼저 하드 가드레일 실행
+    if is_size_question(user_text):
+        hard_answer = build_hard_size_answer(product_context)
+        if hard_answer:
+            st.session_state.messages.append({"role": "assistant", "content": hard_answer})
+            return
 
     answer = get_llm_answer(user_text, product_context)
     st.session_state.messages.append({"role": "assistant", "content": answer})

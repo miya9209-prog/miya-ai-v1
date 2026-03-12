@@ -110,6 +110,7 @@ current_url = qp_value(qp, "url", "")
 product_no = qp_value(qp, "pn", "")
 product_name_q = qp_value(qp, "pname", "")
 
+# 상단 체형 입력값을 URL 파라미터로 유지
 bh = qp_value(qp, "bh", "")
 bw = qp_value(qp, "bw", "")
 bt = qp_value(qp, "bt", "")
@@ -609,6 +610,11 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
     if size_reco.get("recommended"):
         extra_rules.append(f"추천 사이즈 기준값: {size_reco['recommended']}")
 
+    body_ctx = context_pack.get("body_context") or {}
+    if any(body_ctx.values()):
+        extra_rules.append("사용자가 이미 입력한 키/체중/상의/하의 정보가 있으면 그 정보를 우선 반영해서 답하세요.")
+        extra_rules.append("사용자 입력 체형 정보가 있는데도 다시 체형을 물어보지 마세요.")
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "system", "content": "추가 규칙:\n- " + "\n- ".join(extra_rules)},
@@ -631,6 +637,19 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
 
 
 def process_user_message(user_text: str, product_context: dict | None):
+    # 채팅 입력 직전에 세션값을 URL 파라미터 기준으로 한 번 더 동기화
+    latest_bh = qp_value(st.query_params, "bh", st.session_state.body_height)
+    latest_bw = qp_value(st.query_params, "bw", st.session_state.body_weight)
+    latest_bt = qp_value(st.query_params, "bt", st.session_state.body_top)
+    latest_bb = qp_value(st.query_params, "bb", st.session_state.body_bottom)
+
+    st.session_state.body_height = latest_bh
+    st.session_state.body_weight = latest_bw
+    if latest_bt in SIZE_OPTIONS_UI:
+        st.session_state.body_top = latest_bt
+    if latest_bb in SIZE_OPTIONS_UI:
+        st.session_state.body_bottom = latest_bb
+
     st.session_state.messages.append({"role": "user", "content": user_text})
 
     fast = get_fast_policy_answer(user_text)
@@ -718,6 +737,12 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           padding-right: 30px;
           line-height: normal;
         }}
+        .hint {{
+          margin-top: 6px;
+          font-size: 10px;
+          line-height: 1.2;
+          color: #7a7f8c;
+        }}
         @media (max-width: 768px) {{
           .grid {{
             grid-template-columns: 1fr 1fr !important;
@@ -760,6 +785,7 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
             <select id="bb" class="select">{bottom_opts}</select>
           </div>
         </div>
+        <div class="hint">입력 후 바로 상담에 반영돼요.</div>
       </div>
 
       <script>
@@ -777,7 +803,7 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
             url.searchParams.set("bw", bw);
             url.searchParams.set("bt", bt);
             url.searchParams.set("bb", bb);
-            window.parent.location.href = url.toString();
+            window.parent.location.replace(url.toString());
           }} catch (e) {{
             console.error(e);
           }}
@@ -785,18 +811,26 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
 
         function scheduleApply() {{
           clearTimeout(timer);
-          timer = setTimeout(applyValues, 250);
+          timer = setTimeout(applyValues, 350);
         }}
 
-        document.getElementById("bh").addEventListener("change", scheduleApply);
-        document.getElementById("bw").addEventListener("change", scheduleApply);
-        document.getElementById("bt").addEventListener("change", scheduleApply);
-        document.getElementById("bb").addEventListener("change", scheduleApply);
+        const bhEl = document.getElementById("bh");
+        const bwEl = document.getElementById("bw");
+        const btEl = document.getElementById("bt");
+        const bbEl = document.getElementById("bb");
+
+        bhEl.addEventListener("input", scheduleApply);
+        bwEl.addEventListener("input", scheduleApply);
+        bhEl.addEventListener("blur", applyValues);
+        bwEl.addEventListener("blur", applyValues);
+
+        btEl.addEventListener("change", applyValues);
+        bbEl.addEventListener("change", applyValues);
       </script>
     </body>
     </html>
     """
-    components.html(comp_html, height=126, scrolling=False)
+    components.html(comp_html, height=142, scrolling=False)
 
 
 context_key = build_context_key(current_url, product_no, product_name_q)

@@ -205,7 +205,7 @@ def split_sections(text: str) -> dict:
         "summary": joined[:2600],
         "material": extract_by_keywords(["소재", "원단", "혼용", "%", "면", "폴리", "레이온", "아크릴", "울", "스판", "비스코스", "나일론"]),
         "fit": extract_by_keywords(["핏", "여유", "라인", "체형", "복부", "팔뚝", "허벅지", "힙", "루즈", "와이드", "슬림", "정핏", "세미", "커버"]),
-        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "44", "55", "55반", "66", "66반", "77", "77반", "88", "S", "M", "L", "XL", "허리", "총장"]),
+        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "44", "55", "55반", "66", "66반", "77", "77반", "88", "S", "M", "L", "XL", "허리", "총장", "F(", "L("]),
         "shipping": extract_by_keywords(["배송", "출고", "교환", "반품", "배송비"]),
     }
 
@@ -370,7 +370,7 @@ def fetch_product_context(url: str, passed_name: str = "") -> dict | None:
         "shipping": sections["shipping"],
         "color_options": color_options,
         "size_options": size_options,
-        "raw_excerpt": raw_text[:4500],
+        "raw_excerpt": raw_text[:5000],
     }
 
 
@@ -405,7 +405,7 @@ def normalize_size_options(size_options):
             continue
         if any(bad in up for bad in ["LANGUAGE", "SHIPPING TO", "COUNTRY", "배송지", "언어", "컬러", "COLOR"]):
             continue
-        if len(s) > 30:
+        if len(s) > 40:
             continue
         cleaned.append(s)
     return uniq_keep_order(cleaned)
@@ -426,29 +426,45 @@ def size_rank_korean(size_text: str):
     return order.get(s)
 
 
-def extract_max_supported_rank(size_options):
-    if not size_options:
-        return None
+def extract_all_korean_size_ranks(text: str):
+    text = clean_text(text)
+    if not text:
+        return []
 
-    found_ranks = []
     patterns = ["44", "55반", "55", "66반", "66", "77반", "77", "88"]
+    found = []
+    for p in patterns:
+        if p in text:
+            r = size_rank_korean(p)
+            if r is not None:
+                found.append(r)
+    return found
 
-    for opt in size_options:
-        text = clean_text(opt)
-        for p in patterns:
-            if p in text:
-                r = size_rank_korean(p)
-                if r is not None:
-                    found_ranks.append(r)
 
-    if not found_ranks:
+def extract_max_supported_rank_from_sources(product_context: dict | None):
+    if not product_context:
         return None
-    return max(found_ranks)
+
+    candidates = []
+
+    # 1) 실제 옵션 문자열
+    for s in product_context.get("size_options", []) or []:
+        candidates.extend(extract_all_korean_size_ranks(s))
+
+    # 2) size_tip 본문
+    candidates.extend(extract_all_korean_size_ranks(product_context.get("size_tip", "")))
+
+    # 3) raw_excerpt 전체
+    candidates.extend(extract_all_korean_size_ranks(product_context.get("raw_excerpt", "")))
+
+    if not candidates:
+        return None
+    return max(candidates)
 
 
-def is_user_size_over_product_limit(user_top_size: str, size_options):
+def is_user_size_over_product_limit(user_top_size: str, product_context: dict | None):
     user_rank = size_rank_korean(user_top_size)
-    max_rank = extract_max_supported_rank(size_options)
+    max_rank = extract_max_supported_rank_from_sources(product_context)
 
     if user_rank is None or max_rank is None:
         return False, None, None
@@ -513,16 +529,12 @@ def pick_from_korean(weight, options):
     return target if target in available else available[-1]
 
 
-def recommend_size(height_cm, weight_kg, top_size, size_options):
-    options = normalize_size_options(size_options)
-    if not options:
-        return {
-            "recommended": None,
-            "reason": "",
-            "status": "unknown",
-        }
+def recommend_size(height_cm, weight_kg, top_size, product_context: dict | None):
+    options = normalize_size_options((product_context or {}).get("size_options", []))
+    if not product_context:
+        return {"recommended": None, "reason": "", "status": "unknown"}
 
-    over_limit, _user_rank, max_rank = is_user_size_over_product_limit(top_size, options)
+    over_limit, _user_rank, max_rank = is_user_size_over_product_limit(top_size, product_context)
     if over_limit:
         rank_to_label = {
             1: "44", 2: "55", 3: "55반", 4: "66",
@@ -551,11 +563,7 @@ def recommend_size(height_cm, weight_kg, top_size, size_options):
                 "reason": "평소 입으시는 상의 사이즈 기준으로 먼저 보는 쪽이 가장 안전해요.",
                 "status": "ok",
             }
-        return {
-            "recommended": None,
-            "reason": "",
-            "status": "unknown",
-        }
+        return {"recommended": None, "reason": "", "status": "unknown"}
 
     if contains_alpha_sizes(options):
         return {
@@ -571,11 +579,7 @@ def recommend_size(height_cm, weight_kg, top_size, size_options):
             "status": "ok",
         }
 
-    return {
-        "recommended": None,
-        "reason": "",
-        "status": "unknown",
-    }
+    return {"recommended": None, "reason": "", "status": "unknown"}
 
 
 def build_body_context() -> dict:
@@ -649,9 +653,8 @@ def build_hard_size_answer(product_context: dict | None):
 
     body_ctx = build_body_context()
     top_size = clean_text(body_ctx.get("top_size", ""))
-    size_options = product_context.get("size_options", []) or []
 
-    over_limit, _user_rank, max_rank = is_user_size_over_product_limit(top_size, size_options)
+    over_limit, _user_rank, max_rank = is_user_size_over_product_limit(top_size, product_context)
     if not over_limit:
         return None
 
@@ -660,10 +663,17 @@ def build_hard_size_answer(product_context: dict | None):
         5: "66반", 6: "77", 7: "77반", 8: "88",
     }
     max_label = rank_to_label.get(max_rank, "")
-    option_text = ", ".join(size_options) if size_options else f"최대 {max_label}"
+
+    size_options = product_context.get("size_options", []) or []
+    option_text = ", ".join(size_options) if size_options else ""
+    tip_text = clean_text(product_context.get("size_tip", ""))
+
+    basis = option_text or f"최대 {max_label}"
+    if tip_text and max_label:
+        basis = f"{basis} / 사이즈 안내상 최대 {max_label}"
 
     return (
-        f"입력하신 상의 {top_size} 기준이면 이 상품은 페이지상 {option_text}까지라 "
+        f"입력하신 상의 {top_size} 기준이면 이 상품은 페이지상 {basis}까지라 "
         f"여유 있게 맞는다고 보긴 어려워요.\n"
         f"최대 권장 범위가 {max_label}까지로 보여서 타이트할 수 있고, "
         f"편안함 우선이면 77 이상 커버되는 상의를 보시는 쪽이 더 안전해요."
@@ -680,7 +690,7 @@ def build_context_pack(product_context: dict | None):
             body_context.get("height_cm", ""),
             body_context.get("weight_kg", ""),
             body_context.get("top_size", ""),
-            product_context.get("size_options", []),
+            product_context,
         )
 
     return {
@@ -715,6 +725,8 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
             extra_rules.append("확인된 컬러 후보: " + ", ".join(product_context["color_options"]))
         if product_context.get("size_options"):
             extra_rules.append("확인된 사이즈 옵션: " + ", ".join(product_context["size_options"]))
+        if product_context.get("size_tip"):
+            extra_rules.append("본문 사이즈 안내: " + product_context["size_tip"][:300])
 
     size_reco = context_pack.get("size_recommendation") or {}
 
@@ -746,7 +758,7 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
     resp = client.chat.completions.create(
         model="gpt-4.1-mini",
         messages=messages,
-        temperature=0.2,
+        temperature=0.1,
         max_tokens=320,
     )
     return resp.choices[0].message.content.strip()
@@ -760,7 +772,6 @@ def process_user_message(user_text: str, product_context: dict | None):
         st.session_state.messages.append({"role": "assistant", "content": fast})
         return
 
-    # 핵심: 사이즈 질문이면 LLM보다 먼저 하드 가드레일 실행
     if is_size_question(user_text):
         hard_answer = build_hard_size_answer(product_context)
         if hard_answer:
@@ -787,7 +798,7 @@ if product_context:
         body_ctx.get("height_cm", ""),
         body_ctx.get("weight_kg", ""),
         body_ctx.get("top_size", ""),
-        product_context.get("size_options", []),
+        product_context,
     )
 
 st.markdown(
@@ -886,6 +897,11 @@ div[data-testid="stTextInput"] input{
   padding-right:14px !important;
   color:var(--miya-input-text) !important;
   background:var(--miya-input-bg) !important;
+}
+
+div[data-testid="stTextInput"] input::placeholder{
+  color:#8a90a0 !important;
+  opacity:1 !important;
 }
 
 div[data-baseweb="select"]{

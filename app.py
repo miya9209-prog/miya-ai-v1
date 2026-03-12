@@ -81,6 +81,17 @@ COLOR_HINTS = [
     "버건디", "퍼플", "민트", "옐로우", "청", "중청", "연청", "진청",
 ]
 SIZE_OPTIONS_UI = ["", "44", "55", "55반", "66", "66반", "77", "77반", "88"]
+KOR_SIZE_ORDER = {
+    "44": 1,
+    "55": 2,
+    "55반": 3,
+    "66": 4,
+    "66반": 5,
+    "77": 6,
+    "77반": 7,
+    "88": 8,
+}
+KOR_SIZE_LABEL = {v: k for k, v in KOR_SIZE_ORDER.items()}
 
 
 def ensure_state():
@@ -205,7 +216,7 @@ def split_sections(text: str) -> dict:
         "summary": joined[:2600],
         "material": extract_by_keywords(["소재", "원단", "혼용", "%", "면", "폴리", "레이온", "아크릴", "울", "스판", "비스코스", "나일론"]),
         "fit": extract_by_keywords(["핏", "여유", "라인", "체형", "복부", "팔뚝", "허벅지", "힙", "루즈", "와이드", "슬림", "정핏", "세미", "커버"]),
-        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "44", "55", "55반", "66", "66반", "77", "77반", "88", "S", "M", "L", "XL", "허리", "총장", "F(", "L("]),
+        "size_tip": extract_by_keywords(["사이즈", "정사이즈", "추천", "44", "55", "55반", "66", "66반", "77", "77반", "88", "S", "M", "L", "XL", "허리", "총장", "F(", "L(", "FREE"]),
         "shipping": extract_by_keywords(["배송", "출고", "교환", "반품", "배송비"]),
     }
 
@@ -412,18 +423,7 @@ def normalize_size_options(size_options):
 
 
 def size_rank_korean(size_text: str):
-    s = clean_text(size_text)
-    order = {
-        "44": 1,
-        "55": 2,
-        "55반": 3,
-        "66": 4,
-        "66반": 5,
-        "77": 6,
-        "77반": 7,
-        "88": 8,
-    }
-    return order.get(s)
+    return KOR_SIZE_ORDER.get(clean_text(size_text))
 
 
 def extract_all_korean_size_ranks(text: str):
@@ -441,21 +441,18 @@ def extract_all_korean_size_ranks(text: str):
     return found
 
 
-def extract_max_supported_rank_from_sources(product_context: dict | None):
+def extract_max_supported_rank_from_context(product_context: dict | None):
     if not product_context:
         return None
 
     candidates = []
 
-    # 1) 실제 옵션 문자열
-    for s in product_context.get("size_options", []) or []:
+    # 1) 실제 옵션 문자열에서 우선 추출
+    for s in normalize_size_options(product_context.get("size_options", [])):
         candidates.extend(extract_all_korean_size_ranks(s))
 
-    # 2) size_tip 본문
+    # 2) 사이즈 TIP에서 추출
     candidates.extend(extract_all_korean_size_ranks(product_context.get("size_tip", "")))
-
-    # 3) raw_excerpt 전체
-    candidates.extend(extract_all_korean_size_ranks(product_context.get("raw_excerpt", "")))
 
     if not candidates:
         return None
@@ -464,7 +461,7 @@ def extract_max_supported_rank_from_sources(product_context: dict | None):
 
 def is_user_size_over_product_limit(user_top_size: str, product_context: dict | None):
     user_rank = size_rank_korean(user_top_size)
-    max_rank = extract_max_supported_rank_from_sources(product_context)
+    max_rank = extract_max_supported_rank_from_context(product_context)
 
     if user_rank is None or max_rank is None:
         return False, None, None
@@ -530,17 +527,14 @@ def pick_from_korean(weight, options):
 
 
 def recommend_size(height_cm, weight_kg, top_size, product_context: dict | None):
-    options = normalize_size_options((product_context or {}).get("size_options", []))
     if not product_context:
         return {"recommended": None, "reason": "", "status": "unknown"}
 
+    options = normalize_size_options(product_context.get("size_options", []))
+
     over_limit, _user_rank, max_rank = is_user_size_over_product_limit(top_size, product_context)
     if over_limit:
-        rank_to_label = {
-            1: "44", 2: "55", 3: "55반", 4: "66",
-            5: "66반", 6: "77", 7: "77반", 8: "88",
-        }
-        max_label = rank_to_label.get(max_rank, "")
+        max_label = KOR_SIZE_LABEL.get(max_rank, "")
         return {
             "recommended": None,
             "reason": f"입력하신 상의 사이즈 기준으로는 이 상품이 최대 {max_label}까지만 커버하는 것으로 보여 권장 범위를 넘어요.",
@@ -658,19 +652,12 @@ def build_hard_size_answer(product_context: dict | None):
     if not over_limit:
         return None
 
-    rank_to_label = {
-        1: "44", 2: "55", 3: "55반", 4: "66",
-        5: "66반", 6: "77", 7: "77반", 8: "88",
-    }
-    max_label = rank_to_label.get(max_rank, "")
-
-    size_options = product_context.get("size_options", []) or []
+    max_label = KOR_SIZE_LABEL.get(max_rank, "")
+    size_options = normalize_size_options(product_context.get("size_options", []))
     option_text = ", ".join(size_options) if size_options else ""
-    tip_text = clean_text(product_context.get("size_tip", ""))
+    size_tip = clean_text(product_context.get("size_tip", ""))
 
-    basis = option_text or f"최대 {max_label}"
-    if tip_text and max_label:
-        basis = f"{basis} / 사이즈 안내상 최대 {max_label}"
+    basis = option_text or size_tip or f"최대 {max_label}"
 
     return (
         f"입력하신 상의 {top_size} 기준이면 이 상품은 페이지상 {basis}까지라 "
@@ -729,10 +716,8 @@ def get_llm_answer(user_text: str, product_context: dict | None) -> str:
             extra_rules.append("본문 사이즈 안내: " + product_context["size_tip"][:300])
 
     size_reco = context_pack.get("size_recommendation") or {}
-
     if size_reco.get("recommended"):
         extra_rules.append(f"추천 사이즈 기준값: {size_reco['recommended']}")
-
     if size_reco.get("status") == "over_limit":
         extra_rules.append("사용자 상의 사이즈가 상품 최대 권장 범위를 넘으면 '잘 맞는다', '편하게 맞는다', '추천드린다'라고 말하지 마세요.")
         extra_rules.append("이 경우 반드시 '권장 범위를 넘는다', '타이트할 수 있다', '더 큰 사이즈 커버 상품이 안전하다' 방향으로 답하세요.")

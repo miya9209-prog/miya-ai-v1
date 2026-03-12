@@ -679,7 +679,18 @@ footer {visibility:hidden;}
   --miya-user-text:#1f3b36;
 }
 
-div[data-testid="column"]{min-width:0 !important;}
+/* 핵심 수정: 2열 강제 유지 */
+div[data-testid="stHorizontalBlock"]{
+  display:flex !important;
+  flex-wrap:nowrap !important;
+  gap:8px !important;
+  align-items:flex-start !important;
+}
+
+div[data-testid="column"]{
+  min-width:0 !important;
+  flex:1 1 0 !important;
+}
 
 div[data-testid="stTextInput"] label,
 div[data-testid="stSelectbox"] label{
@@ -721,7 +732,14 @@ div[data-testid="stChatInput"]{
   }
 
   div[data-testid="stHorizontalBlock"]{
+    display:flex !important;
+    flex-wrap:nowrap !important;
     gap:6px !important;
+  }
+
+  div[data-testid="column"]{
+    min-width:0 !important;
+    flex:1 1 0 !important;
   }
 
   div[data-testid="stTextInput"] label,

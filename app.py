@@ -5,7 +5,7 @@ import html
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
-from bs4 import BeautifulSoup봄옷맛집! 10%세일 내일 정오까지
+from bs4 import BeautifulSoup
 from openai import OpenAI
 
 st.set_page_config(

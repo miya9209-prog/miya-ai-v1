@@ -4,7 +4,6 @@ import json
 import html
 import requests
 import streamlit as st
-import streamlit.components.v1 as components
 from bs4 import BeautifulSoup
 from openai import OpenAI
 
@@ -111,21 +110,6 @@ qp = st.query_params
 current_url = qp_value(qp, "url", "")
 product_no = qp_value(qp, "pn", "")
 product_name_q = qp_value(qp, "pname", "")
-
-# 사이즈 입력값 URL 파라미터 동기화
-bh = qp_value(qp, "bh", "")
-bw = qp_value(qp, "bw", "")
-bt = qp_value(qp, "bt", "")
-bb = qp_value(qp, "bb", "")
-
-if bh != "":
-    st.session_state.body_height = bh
-if bw != "":
-    st.session_state.body_weight = bw
-if bt in SIZE_OPTIONS_UI:
-    st.session_state.body_top = bt
-if bb in SIZE_OPTIONS_UI:
-    st.session_state.body_bottom = bb
 
 
 def build_context_key(url: str, pn: str, pname: str) -> str:
@@ -720,7 +704,7 @@ footer {visibility:hidden;}
 }
 
 .block-container{
-  max-width:760px;
+  max-width:820px;
   padding-top:0.6rem !important;
   padding-bottom:10.4rem !important;
   padding-left:14px !important;
@@ -730,34 +714,43 @@ footer {visibility:hidden;}
 div[data-testid="stHorizontalBlock"]{
   display:grid !important;
   grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
-  gap:8px !important;
+  gap:12px !important;
   align-items:start !important;
+  width:100% !important;
 }
 
 div[data-testid="stHorizontalBlock"] > div{
   min-width:0 !important;
+  width:100% !important;
+}
+
+div[data-testid="column"]{
+  min-width:0 !important;
+  width:100% !important;
 }
 
 div[data-testid="stTextInput"],
 div[data-testid="stSelectbox"]{
   margin-bottom:-2px !important;
+  width:100% !important;
 }
 
 div[data-testid="stTextInput"] label,
 div[data-testid="stSelectbox"] label{
   color:var(--miya-label) !important;
   font-weight:700 !important;
-  font-size:11px !important;
+  font-size:12px !important;
   line-height:1.15 !important;
-  margin-bottom:3px !important;
+  margin-bottom:4px !important;
 }
 
 div[data-testid="stTextInput"] input{
   border-radius:12px !important;
   min-width:0 !important;
   width:100% !important;
-  padding-left:12px !important;
-  padding-right:12px !important;
+  height:46px !important;
+  padding-left:14px !important;
+  padding-right:14px !important;
   color:var(--miya-input-text) !important;
   background:var(--miya-input-bg) !important;
 }
@@ -771,9 +764,29 @@ div[data-baseweb="select"] > div{
   border-radius:12px !important;
   min-width:0 !important;
   width:100% !important;
-  padding-right:30px !important;
+  min-height:46px !important;
+  padding-right:38px !important;
   color:var(--miya-input-text) !important;
   background:var(--miya-input-bg) !important;
+}
+
+/* 상하의 화살표 보이게 강제 */
+div[data-baseweb="select"] svg{
+  display:block !important;
+  visibility:visible !important;
+  opacity:1 !important;
+  color:#111827 !important;
+  fill:#111827 !important;
+  width:18px !important;
+  height:18px !important;
+}
+
+/* 다크모드에서도 화살표는 입력칸 위에 검정색으로 유지 */
+@media (prefers-color-scheme: dark){
+  div[data-baseweb="select"] svg{
+    color:#111827 !important;
+    fill:#111827 !important;
+  }
 }
 
 hr{
@@ -787,7 +800,7 @@ div[data-testid="stChatInput"]{
   left:50% !important;
   transform:translateX(-50%) !important;
   bottom:58px !important;
-  width:min(720px, calc(100% - 18px)) !important;
+  width:min(760px, calc(100% - 18px)) !important;
   z-index:9999 !important;
 }
 
@@ -824,21 +837,28 @@ div[data-testid="stChatInput"] svg{
 
   div[data-testid="stHorizontalBlock"]{
     grid-template-columns:minmax(0,1fr) minmax(0,1fr) !important;
-    gap:7px !important;
-  }
-
-  div[data-testid="stTextInput"] input{
-    padding-left:10px !important;
-    padding-right:10px !important;
-  }
-
-  div[data-baseweb="select"] > div{
-    padding-right:26px !important;
+    gap:8px !important;
   }
 
   div[data-testid="stTextInput"] label,
   div[data-testid="stSelectbox"] label{
-    font-size:10.5px !important;
+    font-size:11px !important;
+  }
+
+  div[data-testid="stTextInput"] input{
+    height:44px !important;
+    padding-left:12px !important;
+    padding-right:12px !important;
+  }
+
+  div[data-baseweb="select"] > div{
+    min-height:44px !important;
+    padding-right:34px !important;
+  }
+
+  div[data-baseweb="select"] svg{
+    width:18px !important;
+    height:18px !important;
   }
 
   div[data-testid="stChatInput"]{

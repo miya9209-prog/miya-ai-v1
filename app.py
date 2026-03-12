@@ -404,9 +404,9 @@ def normalize_size_options(size_options):
     cleaned = []
     for s in size_options or []:
         s = clean_text(s)
+        up = s.upper()
         if not s:
             continue
-        up = s.upper()
         if any(bad in up for bad in ["LANGUAGE", "SHIPPING TO", "COUNTRY", "배송지", "언어", "컬러", "COLOR"]):
             continue
         if len(s) > 30:
@@ -632,7 +632,7 @@ def process_user_message(user_text: str, product_context: dict | None):
         return
 
     answer = get_llm_answer(user_text, product_context)
-    st.session_state.messages.append({"role": "assistant", "content": answer)
+    st.session_state.messages.append({"role": "assistant", "content": answer})
 
 
 context_key = build_context_key(current_url, product_no, product_name_q)
@@ -826,7 +826,9 @@ if not st.session_state.messages:
             "원하시는 상품 기준으로 같이 봐드릴게요!\n"
             "사이즈, 코디, 배송,교환 중 뭐부터 얘기해볼까요?"
         )
-    st.session_state.messages.append({"role": "assistant", "content": welcome})
+    st.session_state.messages.append(
+        {"role": "assistant", "content": welcome}
+    )
 
 st.divider()
 

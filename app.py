@@ -5,7 +5,7 @@ import html
 import requests
 import streamlit as st
 import streamlit.components.v1 as components
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup봄옷맛집! 10%세일 내일 정오까지
 from openai import OpenAI
 
 st.set_page_config(
@@ -680,7 +680,7 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           width: 100%;
           margin: 0;
           padding: 0;
-          align-items: end;
+          align-items: start;
         }}
         .field {{
           min-width: 0;
@@ -689,14 +689,14 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           display: block;
           margin: 0 0 4px 0;
           font-size: 10.5px;
-          line-height: 1.1;
+          line-height: 1.15;
           font-weight: 700;
           color: #303443;
-          height: 12px;
+          height: 14px;
         }}
         .input, .select {{
           width: 100%;
-          height: 38px;
+          height: 40px;
           border: 1px solid rgba(0,0,0,.05);
           border-radius: 12px;
           background: #f3f5f8;
@@ -707,6 +707,7 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           min-width: 0;
           box-shadow: none;
           display: block;
+          line-height: 40px;
         }}
         .select {{
           appearance: none;
@@ -715,6 +716,7 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           background-repeat: no-repeat;
           background-position: right 10px center;
           padding-right: 30px;
+          line-height: normal;
         }}
         @media (max-width: 768px) {{
           .grid {{
@@ -723,10 +725,10 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
           }}
           .label {{
             font-size: 10px;
-            height: 12px;
+            height: 14px;
           }}
           .input, .select {{
-            height: 38px;
+            height: 40px;
             font-size: 13px;
             padding-left: 10px;
             padding-right: 10px;
@@ -794,7 +796,7 @@ def render_size_input_component(height_val: str, weight_val: str, top_val: str, 
     </body>
     </html>
     """
-    components.html(comp_html, height=118, scrolling=False)
+    components.html(comp_html, height=126, scrolling=False)
 
 
 context_key = build_context_key(current_url, product_no, product_name_q)
@@ -870,15 +872,20 @@ div[data-testid="stChatInput"]{
 @media (max-width: 768px){
   .block-container{
     max-width:100%;
-    padding-top:0.65rem !important;
-    padding-bottom:9.8rem !important;
+    padding-top:0.9rem !important;
+    padding-bottom:8.2rem !important;
     padding-left:12px !important;
     padding-right:12px !important;
   }
 
   div[data-testid="stChatInput"]{
-    bottom:62px !important;
-    width:calc(100% - 14px) !important;
+    position:sticky !important;
+    left:auto !important;
+    transform:none !important;
+    bottom:auto !important;
+    width:100% !important;
+    z-index:5 !important;
+    margin-top:10px !important;
   }
 }
 </style>
@@ -893,7 +900,7 @@ st.markdown(
         미샵 쇼핑친구 <span style="color:#0f6a63;">미야언니</span>
       </div>
       <div style="margin-top:4px; font-size:13px; line-height:1.3; color:#5f6471;">
-        24시간 언제나 미샵님들의 쇼핑 판단에 도움을 드리는 똑똑한 쇼핑친구
+        24시간 쇼핑 판단에 도움을 드리는 똑똑한 쇼핑친구
       </div>
     </div>
     """,
@@ -937,14 +944,17 @@ if not st.session_state.messages:
     if is_product_page(current_url, product_no):
         welcome = (
             "안녕하세요? 옷 같이 봐드리는 미야언니예요:)\n"
-            "'지금 보시는 상품' 기준으로 제가 같이 봐드릴게요!\n"
-            "사이즈, 코디, 배송,교환 중 뭐부터 얘기해볼까요?"
+            "'지금 보시는 상품' 기준으로 같이 봐드릴게요.\n"
+            "사이즈, 코디, 배송, 교환 중 뭐부터 이야기해볼까요?"
         )
     else:
         welcome = (
             "안녕하세요? 옷 같이 봐드리는 미야언니예요:)\n"
-            "원하시는 상품 기준으로 같이 봐드릴게요!\n"
-            "사이즈, 코디, 배송,교환 중 뭐부터 얘기해볼까요?"
+            "지금은 일반 상담 모드예요.\n"
+            "상품 상세페이지에서 채팅창을 열면\n"
+            "그 상품 기준으로 더 정확하게 상담해드릴 수 있어요.\n\n"
+            "궁금한 상품이 있으면 이 채팅창을 끄고\n"
+            "상품 페이지에서 다시 채팅창을 열어주세요:)"
         )
     st.session_state.messages.append({"role": "assistant", "content": welcome})
 

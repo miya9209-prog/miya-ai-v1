@@ -8,7 +8,8 @@ import pandas as pd
 import requests
 import streamlit as st
 from bs4 import BeautifulSoup
-from openai import OpenAI
+from openai import OpenAI, RateLimitError, APIError, APITimeoutError
+import time
 
 st.set_page_config(
     page_title="미야언니",
@@ -22,7 +23,7 @@ if not OPENAI_API_KEY:
     st.error("OPENAI_API_KEY가 설정되지 않았습니다. Streamlit Cloud > App settings > Secrets에 넣어주세요.")
     st.stop()
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = OpenAI(api_key=OPENAI_API_KEY, timeout=25.0, max_retries=1)
 
 POLICY_DB = {
     "shipping": {
@@ -824,9 +825,97 @@ def build_similar_reply(similar_products: list[dict]) -> str | None:
     return "\n".join(lines)
 
 
+def _trim_text(value, limit=240):
+    if value is None:
+        return ""
+    value = str(value).strip()
+    return value if len(value) <= limit else value[: limit - 1] + "…"
+
+
+def _slim_product_context(product_context: dict | None) -> dict:
+    if not product_context:
+        return {}
+    keep = [
+        "product_name", "price", "summary", "fabric", "fit", "fit_type",
+        "size_tip", "size_options", "color_options", "season", "recommended_age",
+        "recommended_body_type", "body_cover_features", "style_tags", "coordination_items",
+    ]
+    slim = {}
+    for k in keep:
+        if k in product_context and product_context.get(k):
+            v = product_context.get(k)
+            if isinstance(v, list):
+                slim[k] = [ _trim_text(x, 60) for x in v[:6] ]
+            else:
+                slim[k] = _trim_text(v, 260)
+    return slim
+
+
+def _slim_similar_products(similar_products: list[dict]) -> list[dict]:
+    slim_list = []
+    for item in (similar_products or [])[:3]:
+        slim_list.append({
+            "product_name": _trim_text(item.get("product_name", ""), 80),
+            "category": _trim_text(item.get("category", ""), 40),
+            "price": _trim_text(item.get("price", ""), 30),
+            "style_tags": _trim_text(item.get("style_tags", ""), 80),
+            "reason": _trim_text(item.get("reason", ""), 120),
+        })
+    return slim_list
+
+
+def _slim_context_pack(context_pack: dict) -> dict:
+    body_context = context_pack.get("body_context") or {}
+    viewer_context = context_pack.get("viewer_context") or {}
+    size_reco = context_pack.get("size_recommendation") or {}
+    return {
+        "viewer_context": viewer_context,
+        "body_context": body_context,
+        "db_status": context_pack.get("db_status") or {},
+        "size_recommendation": {
+            "status": size_reco.get("status"),
+            "recommended": size_reco.get("recommended"),
+            "reason": _trim_text(size_reco.get("reason", ""), 180),
+        },
+        "product_context": _slim_product_context(context_pack.get("product_context")),
+        "similar_products": _slim_similar_products(context_pack.get("similar_products") or []),
+    }
+
+
+def _llm_fallback_answer(user_text: str, product_context: dict | None, similar_products: list[dict], db_status: dict) -> str:
+    pname = (product_context or {}).get("product_name") or "지금 보시는 상품"
+    if is_size_question(user_text):
+        hard = build_hard_size_answer(product_context)
+        if hard:
+            return hard
+    if wants_similar_reco(user_text):
+        sim = build_similar_reply(similar_products)
+        if sim:
+            return sim
+    fast = get_fast_policy_answer(user_text)
+    if fast:
+        return fast
+
+    parts = [f"지금은 문의가 잠깐 몰려서 답변이 지연되고 있어요. 우선 {pname} 기준으로 짧게 안내드릴게요."]
+    if product_context:
+        if product_context.get("size_tip"):
+            parts.append("사이즈는 " + _trim_text(product_context.get("size_tip"), 120))
+        elif product_context.get("size_options"):
+            parts.append("확인되는 사이즈 옵션은 " + ", ".join(product_context.get("size_options", [])[:6]) + " 입니다.")
+        if product_context.get("fabric"):
+            parts.append("소재는 " + _trim_text(product_context.get("fabric"), 90) + " 기준으로 보시면 됩니다.")
+    if similar_products:
+        first = similar_products[0].get("product_name")
+        if first:
+            parts.append(f"비슷한 느낌으로는 {first}도 함께 보셔도 좋아요.")
+    parts.append("잠시 후 다시 한 번 보내주시면 더 정확하게 이어서 답변드릴게요.")
+    return "\n\n".join(parts)
+
+
 def get_llm_answer(user_text: str, product_context: dict | None, similar_products: list[dict], db_status: dict) -> str:
     context_pack = build_context_pack(product_context, similar_products, db_status)
-    is_detail = context_pack["viewer_context"]["is_product_page"]
+    slim_context = _slim_context_pack(context_pack)
+    is_detail = (slim_context.get("viewer_context") or {}).get("is_product_page")
 
     extra_rules = []
     if is_detail:
@@ -847,21 +936,21 @@ def get_llm_answer(user_text: str, product_context: dict | None, similar_product
         if pname and pname != "지금 보시는 상품":
             extra_rules.append(f"현재 상품명 후보: {pname}")
         if product_context.get("size_options"):
-            extra_rules.append("확인된 사이즈 옵션: " + ", ".join(product_context["size_options"]))
+            extra_rules.append("확인된 사이즈 옵션: " + ", ".join(product_context["size_options"][:6]))
         if product_context.get("size_tip"):
-            extra_rules.append("본문/DB 사이즈 안내: " + product_context["size_tip"][:300])
+            extra_rules.append("본문/DB 사이즈 안내: " + _trim_text(product_context["size_tip"], 220))
 
     if similar_products:
         extra_rules.append("사용자가 다른 상품 추천을 원하면 similar_products 범위 안에서 먼저 제안하세요.")
 
-    size_reco = context_pack.get("size_recommendation") or {}
+    size_reco = slim_context.get("size_recommendation") or {}
     if size_reco.get("recommended"):
         extra_rules.append(f"추천 사이즈 기준값: {size_reco['recommended']}")
     if size_reco.get("status") == "over_limit":
         extra_rules.append("사용자 상의 사이즈가 상품 최대 권장 범위를 넘으면 절대 추천하지 마세요.")
         extra_rules.append(f"사이즈 제한 사유: {size_reco.get('reason', '')}")
 
-    body_ctx = context_pack.get("body_context") or {}
+    body_ctx = slim_context.get("body_context") or {}
     if any(body_ctx.values()):
         extra_rules.append("사용자가 이미 입력한 키/체중/상의/하의 정보가 있으면 그 정보를 우선 반영해서 답하세요.")
         extra_rules.append("사용자 입력 체형 정보가 있는데도 다시 체형을 물어보지 마세요.")
@@ -869,22 +958,39 @@ def get_llm_answer(user_text: str, product_context: dict | None, similar_product
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "system", "content": "추가 규칙:\n- " + "\n- ".join(extra_rules)},
-        {"role": "system", "content": "참고 데이터(JSON):\n" + json.dumps(context_pack, ensure_ascii=False)},
+        {"role": "system", "content": "참고 데이터(JSON):\n" + json.dumps(slim_context, ensure_ascii=False)},
     ]
 
-    history = st.session_state.messages[-8:]
+    history = st.session_state.messages[-6:]
     for m in history:
-        messages.append({"role": m["role"], "content": m["content"]})
+        content = _trim_text(m.get("content", ""), 280)
+        if content:
+            messages.append({"role": m["role"], "content": content})
 
-    messages.append({"role": "user", "content": user_text})
+    messages.append({"role": "user", "content": _trim_text(user_text, 350)})
 
-    resp = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=messages,
-        temperature=0.1,
-        max_tokens=320,
-    )
-    return resp.choices[0].message.content.strip()
+    last_err = None
+    for wait_s in (1.0, 2.0):
+        try:
+            resp = client.chat.completions.create(
+                model="gpt-4.1-mini",
+                messages=messages,
+                temperature=0.1,
+                max_tokens=280,
+            )
+            content = (resp.choices[0].message.content or "").strip()
+            if content:
+                return content
+            break
+        except RateLimitError as e:
+            last_err = e
+            time.sleep(wait_s)
+        except (APIError, APITimeoutError) as e:
+            last_err = e
+            time.sleep(wait_s)
+
+    print(f"[MIYA_V1_LLM_ERROR] {type(last_err).__name__ if last_err else 'EmptyResponse'}")
+    return _llm_fallback_answer(user_text, product_context, similar_products, db_status)
 
 
 def process_user_message(user_text: str, product_context: dict | None, similar_products: list[dict], db_status: dict):
